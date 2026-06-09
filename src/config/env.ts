@@ -19,6 +19,8 @@ export type Env = {
   aiGatewayApiKey: string | undefined;
   vercelOidcToken: string | undefined;
   tavilyApiKey: string | undefined;
+  composioApiKey: string | undefined;
+  zilmateUserId: string | undefined;
   upstashRedisRestUrl: string | undefined;
   upstashRedisRestToken: string | undefined;
   managerModel: string;
@@ -34,6 +36,8 @@ export const env: Env = {
   aiGatewayApiKey: process.env.AI_GATEWAY_API_KEY,
   vercelOidcToken: process.env.VERCEL_OIDC_TOKEN,
   tavilyApiKey: process.env.TAVILY_API_KEY,
+  composioApiKey: process.env.COMPOSIO_API_KEY,
+  zilmateUserId: process.env.ZILMATE_USER_ID,
   upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL,
   upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN,
   managerModel: process.env.ZILO_MANAGER_MODEL || 'minimax/minimax-m3',
@@ -60,6 +64,19 @@ export function requireTavily() {
     throw new Error('Missing TAVILY_API_KEY. Run `zilmate setup` or add it to .env to enable web research.');
   }
   return env.tavilyApiKey;
+}
+
+export function hasComposio() {
+  return Boolean(env.composioApiKey && env.zilmateUserId);
+}
+
+export function requireComposio() {
+  if (!env.composioApiKey) {
+    throw new Error('Missing COMPOSIO_API_KEY. Run `zilmate setup` to enable external app tools.');
+  }
+  if (!env.zilmateUserId) {
+    throw new Error('Missing ZILMATE_USER_ID. Run `zilmate setup` to generate a stable local user id.');
+  }
 }
 
 export function hasRedis() {

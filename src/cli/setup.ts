@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import chalk from 'chalk';
@@ -9,6 +10,8 @@ type SetupOptions = {
   force?: boolean;
   yes?: boolean;
   aiGatewayKey?: string;
+  composioKey?: string;
+  zilmateUserId?: string;
   tavilyKey?: string;
   redisUrl?: string;
   redisToken?: string;
@@ -67,6 +70,8 @@ async function askYesNo(rl: readline.Interface, prompt: string, defaultValue = f
 function buildEnv(values: Map<string, string>) {
   const lines: Array<[string, string]> = [
     ['AI_GATEWAY_API_KEY', values.get('AI_GATEWAY_API_KEY') || ''],
+    ['COMPOSIO_API_KEY', values.get('COMPOSIO_API_KEY') || ''],
+    ['ZILMATE_USER_ID', values.get('ZILMATE_USER_ID') || ''],
     ['TAVILY_API_KEY', values.get('TAVILY_API_KEY') || ''],
     ['UPSTASH_REDIS_REST_URL', values.get('UPSTASH_REDIS_REST_URL') || ''],
     ['UPSTASH_REDIS_REST_TOKEN', values.get('UPSTASH_REDIS_REST_TOKEN') || ''],
@@ -101,6 +106,8 @@ export async function runSetup(options: SetupOptions = {}) {
 
     const values = new Map(existing);
     if (options.aiGatewayKey) values.set('AI_GATEWAY_API_KEY', options.aiGatewayKey);
+    if (options.composioKey !== undefined) values.set('COMPOSIO_API_KEY', options.composioKey);
+    if (options.zilmateUserId !== undefined) values.set('ZILMATE_USER_ID', options.zilmateUserId);
     if (options.tavilyKey !== undefined) values.set('TAVILY_API_KEY', options.tavilyKey);
     if (options.redisUrl !== undefined) values.set('UPSTASH_REDIS_REST_URL', options.redisUrl);
     if (options.redisToken !== undefined) values.set('UPSTASH_REDIS_REST_TOKEN', options.redisToken);
@@ -110,11 +117,20 @@ export async function runSetup(options: SetupOptions = {}) {
       values.set('AI_GATEWAY_API_KEY', options.aiGatewayKey);
     } else if (!currentGatewayKey && options.yes) {
       throw new Error('AI_GATEWAY_API_KEY is required. Pass --ai-gateway-key or run setup interactively.');
-    } else if (currentGatewayKey) {
+    } else if (currentGatewayKey && !options.yes) {
       const replace = await askYesNo(rl, 'AI_GATEWAY_API_KEY already exists. Replace it?', false);
       if (replace) values.set('AI_GATEWAY_API_KEY', await askRequiredSecret(rl, 'AI_GATEWAY_API_KEY: '));
-    } else {
+    } else if (!currentGatewayKey) {
       values.set('AI_GATEWAY_API_KEY', await askRequiredSecret(rl, 'AI_GATEWAY_API_KEY: '));
+    }
+
+    if (!values.get('ZILMATE_USER_ID')) {
+      values.set('ZILMATE_USER_ID', `zilmate-${randomUUID()}`);
+    }
+
+    if (!options.yes && options.composioKey === undefined && await askYesNo(rl, 'Add Composio API key for external app tools?', Boolean(values.get('COMPOSIO_API_KEY')))) {
+      const composioKey = await askOptionalSecret(rl, 'COMPOSIO_API_KEY (blank to skip): ');
+      values.set('COMPOSIO_API_KEY', composioKey);
     }
 
     if (!options.yes && options.tavilyKey === undefined && await askYesNo(rl, 'Add Tavily web search key?', Boolean(values.get('TAVILY_API_KEY')))) {

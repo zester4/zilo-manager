@@ -13,6 +13,8 @@ import { startInteractiveChat } from './cli/interactive.js';
 import { runSetup } from './cli/setup.js';
 import { memoryBackendName } from './memory/redis.js';
 import { printError, printJson, printMarkdown, printProgress } from './cli/format.js';
+import { createTerminalConfirmation } from './cli/confirm.js';
+import { getComposioStatus } from './tools/composio.tool.js';
 
 type TextAgentFactory = () => { generate: (input: { prompt: string }) => Promise<{ text: string }> };
 
@@ -32,7 +34,7 @@ async function runAgentText(agentFactory: TextAgentFactory, prompt: string) {
 
 function friendlyError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  if (/AI_GATEWAY_API_KEY|VERCEL_OIDC_TOKEN|TAVILY_API_KEY/.test(message)) return message;
+  if (/AI_GATEWAY_API_KEY|VERCEL_OIDC_TOKEN|TAVILY_API_KEY|COMPOSIO_API_KEY|ZILMATE_USER_ID/.test(message)) return message;
   return `ZilMate failed: ${message}`;
 }
 
@@ -48,21 +50,46 @@ program
   .option('-f, --force', 'skip the first overwrite confirmation when the env file exists')
   .option('-y, --yes', 'noninteractive mode; write defaults plus provided keys')
   .option('--ai-gateway-key <key>', 'AI Gateway API key')
+  .option('--composio-key <key>', 'optional Composio API key for external app tools')
+  .option('--zilmate-user-id <id>', 'stable local user id for Composio sessions')
   .option('--tavily-key <key>', 'optional Tavily API key for web research')
   .option('--redis-url <url>', 'optional Upstash Redis REST URL')
   .option('--redis-token <token>', 'optional Upstash Redis REST token')
   .description('Create or update a local .env file for ZilMate')
-  .action(async (options: { path: string; force?: boolean; yes?: boolean; aiGatewayKey?: string; tavilyKey?: string; redisUrl?: string; redisToken?: string }) => {
+  .action(async (options: { path: string; force?: boolean; yes?: boolean; aiGatewayKey?: string; composioKey?: string; zilmateUserId?: string; tavilyKey?: string; redisUrl?: string; redisToken?: string }) => {
     try {
       await runSetup({
         path: options.path,
         force: Boolean(options.force),
         yes: Boolean(options.yes),
         ...(options.aiGatewayKey !== undefined ? { aiGatewayKey: options.aiGatewayKey } : {}),
+        ...(options.composioKey !== undefined ? { composioKey: options.composioKey } : {}),
+        ...(options.zilmateUserId !== undefined ? { zilmateUserId: options.zilmateUserId } : {}),
         ...(options.tavilyKey !== undefined ? { tavilyKey: options.tavilyKey } : {}),
         ...(options.redisUrl !== undefined ? { redisUrl: options.redisUrl } : {}),
         ...(options.redisToken !== undefined ? { redisToken: options.redisToken } : {}),
       });
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+const apps = program
+  .command('apps')
+  .description('Manage external app tooling through Composio');
+
+apps
+  .command('status')
+  .option('-s, --session <id>', 'ZilMate chat session id', 'default')
+  .description('Show Composio setup, user id, session, and toolkit connection status')
+  .action(async (options: { session: string }) => {
+    try {
+      const status = await getComposioStatus(options.session);
+      printJson(status);
+      if (!status.configured) {
+        console.log('Composio is not configured. Run `zilmate setup` and add `COMPOSIO_API_KEY` to enable GitHub/Gmail/Slack/Stripe/Supabase-style external app tools.');
+      }
     } catch (error) {
       printError(friendlyError(error));
       process.exitCode = 1;
@@ -176,11 +203,16 @@ program
 program
   .command('manager')
   .argument('<prompt...>', 'manager orchestration prompt')
+  .option('-s, --session <id>', 'persistent manager session id for Composio tools', 'default')
   .description('Route a one-shot task through the manager agent')
-  .action(async (prompt: string[]) => {
+  .action(async (prompt: string[], options: { session: string }) => {
     try {
       requireGatewayAuth();
-      await printResult(await runManager(prompt.join(' '), { progress: printProgress }));
+      await printResult(await runManager(prompt.join(' '), {
+        progress: printProgress,
+        sessionId: options.session,
+        confirm: createTerminalConfirmation(),
+      }));
     } catch (error) {
       printError(friendlyError(error));
       process.exitCode = 1;

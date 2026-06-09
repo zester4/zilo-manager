@@ -6,6 +6,7 @@ import { runManager } from '../agents/manager.js';
 import { loadTurns, saveTurns, type ChatTurn } from '../memory/history.js';
 import { memoryBackendName } from '../memory/redis.js';
 import { printAssistant, printProgress, printStatus, printTitle, printUserPrompt } from './format.js';
+import { createReadlineConfirmation } from './confirm.js';
 
 function transcript(turns: ChatTurn[]) {
   if (turns.length === 0) return '';
@@ -56,7 +57,11 @@ export async function startInteractiveChat(sessionId = 'default') {
         ? `Conversation so far:\n${context}\n\nNew user message:\n${message}\n\nAnswer as ZilMate. Delegate to subagents when useful and return a concise final answer.`
         : `${message}\n\nAnswer as ZilMate. Delegate to subagents when useful and return a concise final answer.`;
 
-      const response = await runManager(prompt, { progress: printProgress });
+      const response = await runManager(prompt, {
+        progress: printProgress,
+        sessionId,
+        confirm: createReadlineConfirmation(rl),
+      });
       printAssistant(response);
 
       turns.push(

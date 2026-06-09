@@ -10,8 +10,10 @@ import { createDocsResearchAgent } from './docs-research.agent.js';
 import { checkReadOnlyIntent } from '../safety/approvals.js';
 import { limits } from '../safety/limits.js';
 import { emitProgress, type ProgressEvent, withProgressListener } from '../runtime/progress.js';
+import { type ConfirmationHandler, withConfirmationHandler } from '../runtime/confirm.js';
 import { createScratchpadTools } from '../tools/scratchpad.tool.js';
 import { ziloDocsTools } from '../tools/zilo-docs.tool.js';
+import { createComposioTools } from '../tools/composio.tool.js';
 
 function agentInput(prompt: string, abortSignal?: AbortSignal) {
   return abortSignal ? { prompt, abortSignal } : { prompt };
@@ -29,6 +31,12 @@ function describeTool(name: string) {
     listZiloDocs: 'Listing Zilo docs',
     readZiloDoc: 'Reading Zilo doc',
     searchZiloDocs: 'Searching Zilo docs',
+    COMPOSIO_SEARCH_TOOLS: 'Searching Composio tools',
+    COMPOSIO_GET_TOOL_SCHEMAS: 'Loading Composio tool schemas',
+    COMPOSIO_MANAGE_CONNECTIONS: 'Managing Composio connection',
+    COMPOSIO_MULTI_EXECUTE_TOOL: 'Executing Composio tool',
+    COMPOSIO_REMOTE_WORKBENCH: 'Using Composio workbench',
+    COMPOSIO_REMOTE_BASH_TOOL: 'Using Composio bash tool',
   };
   return labels[name] || `Using ${name}`;
 }
@@ -52,17 +60,25 @@ function subagentTool(name: string, description: string, run: (prompt: string, a
   });
 }
 
-export function createManagerAgent(runId: string = randomUUID()) {
+export async function createManagerAgent(runId: string = randomUUID(), options: { sessionId?: string } = {}) {
   const quickHelp = createQuickHelpAgent();
   const chat = createChatAgent();
   const post = createPostAgent();
   const image = createImageAgent();
   const research = createDocsResearchAgent(runId);
   const scratchpadTools = createScratchpadTools(runId);
+  const composioTools = await createComposioTools(options.sessionId || 'default');
 
   return new ToolLoopAgent({
     model: models.manager,
-    instructions: 'You are ZilMate, the CLI orchestrator for ZiloShift app operations. Route to specialized subagents. Keep parent context small. You can guide, research, draft, chat, and generate image assets. You may use scratchpad tools for compact notes during multi-source or multi-subagent tasks. You must not mutate production systems or claim you performed app changes.',
+    instructions: [
+      'You are ZilMate, a general CLI assistant with deep built-in ZiloShift expertise.',
+      'Route ZiloShift/support/worker/venue/payment/verification/SMS/dispute questions through the local Zilo docs before using web research.',
+      'Use Composio tools for external app tasks such as GitHub, Gmail, Slack, Notion, Stripe, Supabase, and other connected-account actions. If a needed app is not connected, use Composio connection management and surface the connect link to the user.',
+      'Use research for current web or documentation questions. Use specialized subagents for focused chat, quick help, post copy, image assets, and research.',
+      'Keep parent context small and use scratchpad tools for compact notes during multi-source or multi-step tasks.',
+      'Do not build OAuth flows yourself. Do not claim live external changes happened unless the tool result confirms them.',
+    ].join(' '),
     tools: {
       quickHelp: subagentTool('quickHelp', 'Fast troubleshooting and usage guidance.', async (prompt, abortSignal) => {
         const result = await quickHelp.generate(agentInput(prompt, abortSignal));
@@ -86,6 +102,7 @@ export function createManagerAgent(runId: string = randomUUID()) {
       }),
       ...ziloDocsTools,
       ...scratchpadTools,
+      ...composioTools,
     },
     stopWhen: stepCountIs(limits.managerSteps),
   });
@@ -96,24 +113,27 @@ function toolNamesFromStep(step: unknown) {
   return toolCalls.map((call) => call.toolName).filter((name): name is string => Boolean(name));
 }
 
-export async function runManager(prompt: string, options: { progress?: (event: ProgressEvent) => void; runId?: string } = {}) {
+export async function runManager(prompt: string, options: { progress?: (event: ProgressEvent) => void; runId?: string; sessionId?: string; confirm?: ConfirmationHandler } = {}) {
   const safety = checkReadOnlyIntent(prompt);
   if (safety.decision === 'blocked') return safety.reason!;
 
   return withProgressListener(options.progress, async () => {
-    const runId = options.runId || randomUUID();
-    emitProgress({ type: 'thinking', label: 'Thinking', detail: runId });
-    const result = await createManagerAgent(runId).generate({
-      prompt,
-      onStepFinish: (step) => {
-        const tools = toolNamesFromStep(step);
-        if (tools.length > 0) {
-          emitProgress({ type: 'step', label: 'Manager selected tools', detail: tools.join(', ') });
-        }
-      },
+    return withConfirmationHandler(options.confirm, async () => {
+      const runId = options.runId || randomUUID();
+      emitProgress({ type: 'thinking', label: 'Thinking', detail: runId });
+      const manager = await createManagerAgent(runId, options.sessionId ? { sessionId: options.sessionId } : {});
+      const result = await manager.generate({
+        prompt,
+        onStepFinish: (step) => {
+          const tools = toolNamesFromStep(step);
+          if (tools.length > 0) {
+            emitProgress({ type: 'step', label: 'Manager selected tools', detail: tools.map(describeTool).join(', ') });
+          }
+        },
+      });
+      emitProgress({ type: 'done', label: 'Response ready' });
+      return result.text;
     });
-    emitProgress({ type: 'done', label: 'Response ready' });
-    return result.text;
   });
 }
 

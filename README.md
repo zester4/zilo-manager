@@ -1,6 +1,6 @@
 # ZilMate
 
-ZilMate is the CLI-first multi-agent assistant for ZiloShift workflows. It can chat, answer support questions, draft posts, research docs/web sources, and generate image assets while delegating work to specialized subagents.
+ZilMate is a CLI-first general assistant with deep built-in ZiloShift expertise. It can chat, answer support questions, draft posts, research docs/web sources, generate image assets, and use Composio for external app tools such as GitHub, Gmail, Slack, Notion, Stripe, and Supabase.
 
 The GitHub project can remain `zilo-manager`, but the installable npm package and command are `@zilo/zilmate` and `zilmate`.
 
@@ -37,8 +37,8 @@ iwr https://raw.githubusercontent.com/zester4/zilo-manager/main/install.ps1 | ie
 The installer runs the full first-use flow:
 
 1. Installs ZilMate globally.
-2. Runs `zilmate setup` to collect `AI_GATEWAY_API_KEY`.
-3. Lets users skip Tavily and Redis keys.
+2. Runs `zilmate setup` to collect `AI_GATEWAY_API_KEY`, optional `COMPOSIO_API_KEY`, optional `TAVILY_API_KEY`, and optional Redis keys.
+3. Lets users skip Composio, Tavily, and Redis keys.
 4. Runs `zilmate ping` to verify the key.
 5. Starts `zilmate talk`.
 
@@ -78,12 +78,14 @@ The easiest path is:
 zilmate setup
 ```
 
-It asks for `AI_GATEWAY_API_KEY`, optionally asks for `TAVILY_API_KEY` and Upstash Redis keys, then writes a local `.env`. Tavily and Redis can be skipped.
+It asks for `AI_GATEWAY_API_KEY`, optionally asks for `COMPOSIO_API_KEY`, `TAVILY_API_KEY`, and Upstash Redis keys, then writes a local `.env`. Composio, Tavily, and Redis can be skipped.
 
 You can also create `.env` manually:
 
 ```env
 AI_GATEWAY_API_KEY=your_vercel_ai_gateway_key
+COMPOSIO_API_KEY=your_composio_key
+ZILMATE_USER_ID=zilmate-generated-local-user-id
 TAVILY_API_KEY=your_tavily_key
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
@@ -96,7 +98,9 @@ ZILO_IMAGE_GEMINI_MODEL=google/gemini-3-pro-image
 ZILO_IMAGE_MODEL=
 ```
 
-Redis is optional. If `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set, chat turns and scratchpads use Redis. If they are missing, ZilMate falls back to local files under `.zilo-manager/`.
+Composio is optional. If `COMPOSIO_API_KEY` is set, ZilMate creates a stable local `ZILMATE_USER_ID`, reuses Composio sessions per chat session, and lets Composio manage app auth links and connected accounts.
+
+Redis is optional. If `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set, chat turns, scratchpads, and Composio session ids use Redis. If they are missing, ZilMate falls back to local files under `.zilo-manager/`.
 
 ## Development Commands
 
@@ -107,6 +111,7 @@ npm run build
 npm run zilmate -- --help
 npm run zilmate -- setup
 npm run zilmate -- models
+npm run zilmate -- apps status
 npm run zilmate -- talk
 npm run zilmate -- talk --session launch
 npm run zilmate -- help "why can't a worker apply?"
@@ -140,6 +145,7 @@ zilmate setup
 zilmate talk
 zilmate ping
 zilmate models
+zilmate apps status
 zilmate help "worker cannot see shifts"
 zilmate image --model openai --size 1024x1024 "ZiloShift launch poster"
 ```
@@ -148,6 +154,7 @@ zilmate image --model openai --size 1024x1024 "ZiloShift launch poster"
 
 - `talk`: persistent interactive chat with the main manager agent. This is the best mode for normal use and renders rich terminal Markdown.
 - `manager`: one-shot manager orchestration. It can delegate to subagents and use scratchpad tools.
+- `apps status`: show whether Composio is configured, the local `ZILMATE_USER_ID`, the current Composio session id, and connected/available toolkit status when the SDK can fetch it.
 - `help`: fast troubleshooting and app guidance.
 - `chat`: one-shot natural dialogue about ZiloShift workflows.
 - `post`: WhatsApp/status/social copy generation.
@@ -155,19 +162,33 @@ zilmate image --model openai --size 1024x1024 "ZiloShift launch poster"
 - `image`: Gateway image generation that saves files under `outputs/images/`. Use `--model openai|chatgpt|gemini` and optionally `--size 1024x1024` for OpenAI.
 - `models`: selected models, Gateway availability warnings, and active memory backend.
 - `ping`: tiny Gateway text call to verify auth.
-- `setup`: interactive `.env` setup for API keys, optional Tavily search, optional Redis memory, and model defaults.
+- `setup`: interactive `.env` setup for the required AI Gateway key, optional Composio external app tools, optional Tavily search, optional Redis memory, and model defaults.
 
 ## Agent Architecture
 
-ZilMate uses a manager agent that delegates to focused subagents:
+ZilMate uses a manager agent that delegates to focused subagents and external tools:
 
 - Quick Help: short troubleshooting and app usage guidance.
 - Chat: broader ZiloShift workflow conversation.
 - Post: launch messages, WhatsApp statuses, captions, and outreach copy.
 - Research: local Zilo docs first, then external docs/web research when needed.
 - Image: image generation through Gateway image models.
+- Composio: external app discovery, auth links, schemas, and execution, attached only to the manager.
 
-Local ZiloShift docs live under `src/doc/`. ZilMate reads them on demand through dedicated tools instead of dumping all docs into every prompt.
+Local ZiloShift docs live under `src/doc/`. ZilMate reads them on demand through dedicated tools instead of dumping all docs into every prompt. The manager prefers these local docs for ZiloShift support, worker, venue, payment, verification, SMS, and dispute questions.
+
+## External Apps With Composio
+
+Run setup and add a Composio key:
+
+```powershell
+zilmate setup
+zilmate apps status
+```
+
+In `zilmate talk`, ask for the external task naturally. If an account is not connected yet, ZilMate uses Composio connection tools and prints the connect link returned by Composio. ZilMate does not implement custom OAuth flows.
+
+Read/search/schema/auth-link tools can run without confirmation. Write-like external app actions such as create, update, delete, send, post, publish, invite, transfer, charge, refund, cancel, approve, revoke, workbench, or bash require `Proceed? (y/N)` in the terminal. In noninteractive mode, write-like actions are blocked.
 
 ## Model Notes
 
@@ -189,6 +210,6 @@ Local ZiloShift docs live under `src/doc/`. ZilMate reads them on demand through
 
 ## Safety Notes
 
-ZilMate is currently designed as a read-only assistant/scaffold. It can guide, research, draft, and generate assets, but it should not mutate production systems or claim that it changed live ZiloShift data.
+ZilMate can guide, research, draft, generate assets, and run approved external app actions through Composio. It should not claim that live external or ZiloShift data changed unless a tool result confirms it.
 
 Before adding real actions around payments, identity, SMS, users, or admin operations, add stronger permission levels, confirmation gates, audit logs, and behavioral evals.
