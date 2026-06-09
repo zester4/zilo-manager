@@ -34,10 +34,24 @@ From PowerShell, the helper can install from GitHub by default:
 iwr https://raw.githubusercontent.com/zester4/zilo-manager/main/install.ps1 | iex
 ```
 
-The installer runs `zilmate setup` after installing. To install without setup:
+The installer runs the full first-use flow:
+
+1. Installs ZilMate globally.
+2. Runs `zilmate setup` to collect `AI_GATEWAY_API_KEY`.
+3. Lets users skip Tavily and Redis keys.
+4. Runs `zilmate ping` to verify the key.
+5. Starts `zilmate talk`.
+
+To install without setup:
 
 ```powershell
 iex "& { $((iwr -UseBasicParsing https://raw.githubusercontent.com/zester4/zilo-manager/main/install.ps1).Content) } -NoSetup"
+```
+
+To skip ping or chat startup:
+
+```powershell
+iex "& { $((iwr -UseBasicParsing https://raw.githubusercontent.com/zester4/zilo-manager/main/install.ps1).Content) } -NoPing -NoTalk"
 ```
 
 To install from npm after publishing:
@@ -46,7 +60,7 @@ To install from npm after publishing:
 iex "& { $((iwr -UseBasicParsing https://raw.githubusercontent.com/zester4/zilo-manager/main/install.ps1).Content) } -Source npm"
 ```
 
-The helper checks for Node/npm, runs `npm install -g`, prints `zilmate --help`, and starts setup unless `-NoSetup` is passed.
+The helper checks for Node/npm, runs `npm install -g`, prints `zilmate --help`, starts setup unless `-NoSetup` is passed, verifies auth unless `-NoPing` is passed, and starts chat unless `-NoTalk` is passed.
 
 ## Setup
 
@@ -64,7 +78,7 @@ The easiest path is:
 zilmate setup
 ```
 
-It asks for `AI_GATEWAY_API_KEY`, optionally asks for `TAVILY_API_KEY` and Upstash Redis keys, then writes a local `.env`.
+It asks for `AI_GATEWAY_API_KEY`, optionally asks for `TAVILY_API_KEY` and Upstash Redis keys, then writes a local `.env`. Tavily and Redis can be skipped.
 
 You can also create `.env` manually:
 
