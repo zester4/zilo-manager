@@ -110,8 +110,13 @@ Use these while working inside the project folder:
 npm run build
 npm run zilmate -- --help
 npm run zilmate -- setup
+npm run zilmate -- doctor
+npm run zilmate -- config
 npm run zilmate -- models
 npm run zilmate -- apps status
+npm run zilmate -- remember "Prefers concise support replies"
+npm run zilmate -- recall support
+npm run zilmate -- memory list
 npm run zilmate -- talk
 npm run zilmate -- talk --session launch
 npm run zilmate -- help "why can't a worker apply?"
@@ -126,6 +131,7 @@ Shortcut:
 
 ```powershell
 npm run talk
+npm run doctor
 ```
 
 ## Global CLI
@@ -142,10 +148,16 @@ Then use ZilMate directly:
 ```powershell
 zilmate --help
 zilmate setup
+zilmate doctor
+zilmate env check
+zilmate config
 zilmate talk
 zilmate ping
 zilmate models
 zilmate apps status
+zilmate remember "Use a warm but concise support tone"
+zilmate recall support
+zilmate memory list
 zilmate help "worker cannot see shifts"
 zilmate image --model openai --size 1024x1024 "ZiloShift launch poster"
 ```
@@ -154,6 +166,13 @@ zilmate image --model openai --size 1024x1024 "ZiloShift launch poster"
 
 - `talk`: persistent interactive chat with the main manager agent. This is the best mode for normal use and renders rich terminal Markdown.
 - `manager`: one-shot manager orchestration. It can delegate to subagents and use scratchpad tools.
+- `doctor`: check local setup, required/optional keys, Node version, memory folder, Redis completeness, and optional live Gateway/Composio status with `--live`.
+- `env check`: environment-readiness alias for `doctor`.
+- `config`: sanitized config summary without secrets.
+- `remember`: save durable long-term memory.
+- `recall`: search durable long-term memory.
+- `forget`: delete one memory by id, or use `--all`.
+- `memory list`: list saved durable memories.
 - `apps status`: show whether Composio is configured, the local `ZILMATE_USER_ID`, the current Composio session id, and connected/available toolkit status when the SDK can fetch it.
 - `help`: fast troubleshooting and app guidance.
 - `chat`: one-shot natural dialogue about ZiloShift workflows.
@@ -174,6 +193,7 @@ ZilMate uses a manager agent that delegates to focused subagents and external to
 - Research: local Zilo docs first, then external docs/web research when needed.
 - Image: image generation through Gateway image models.
 - Composio: external app discovery, auth links, schemas, and execution, attached only to the manager.
+- Memory: durable ZilMate facts and preferences saved locally or in Redis, available through CLI commands and manager tools.
 
 Local ZiloShift docs live under `src/doc/`. ZilMate reads them on demand through dedicated tools instead of dumping all docs into every prompt. The manager prefers these local docs for ZiloShift support, worker, venue, payment, verification, SMS, and dispute questions.
 
@@ -205,6 +225,8 @@ Read/search/schema/auth-link tools can run without confirmation. Write-like exte
 - Tavily powers web search, URL extraction, site mapping, small capped crawls, and deep research.
 - Web crawling and deep research are intentionally heavier tools and should be used only when local docs/search are not enough.
 - Scratchpads keep intermediate notes outside the main prompt context.
+- Long-term memory stores stable preferences and durable project facts. Use `zilmate remember`, `zilmate recall`, `zilmate forget`, and `zilmate memory list`.
+- `zilmate talk` automatically recalls relevant long-term memories for each message.
 - Redis is optional; local file memory is the fallback.
 - `zilmate setup` creates or updates the local `.env` used by the CLI.
 

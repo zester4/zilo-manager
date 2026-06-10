@@ -14,6 +14,7 @@ import { type ConfirmationHandler, withConfirmationHandler } from '../runtime/co
 import { createScratchpadTools } from '../tools/scratchpad.tool.js';
 import { ziloDocsTools } from '../tools/zilo-docs.tool.js';
 import { createComposioTools } from '../tools/composio.tool.js';
+import { memoryTools } from '../tools/memory.tool.js';
 
 function agentInput(prompt: string, abortSignal?: AbortSignal) {
   return abortSignal ? { prompt, abortSignal } : { prompt };
@@ -28,6 +29,10 @@ function describeTool(name: string) {
     research: 'Using research subagent',
     readScratchpad: 'Reading scratchpad',
     appendScratchpad: 'Updating scratchpad',
+    rememberMemory: 'Saving memory',
+    recallMemory: 'Recalling memory',
+    listMemory: 'Listing memory',
+    forgetMemory: 'Forgetting memory',
     listZiloDocs: 'Listing Zilo docs',
     readZiloDoc: 'Reading Zilo doc',
     searchZiloDocs: 'Searching Zilo docs',
@@ -78,6 +83,7 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
       'For Composio, prefer this flow: use COMPOSIO_SEARCH_TOOLS to find relevant external app tools, COMPOSIO_GET_TOOL_SCHEMAS to inspect required arguments, COMPOSIO_MANAGE_CONNECTIONS to create or show app connection links, and COMPOSIO_MULTI_EXECUTE_TOOL to execute selected tools after arguments are clear.',
       'When COMPOSIO_MANAGE_CONNECTIONS returns an authorization or connect URL, print that URL plainly and tell the user to open it to connect their account before retrying the app action.',
       'Use research for current web or documentation questions. Use specialized subagents for focused chat, quick help, post copy, image assets, and research.',
+      'Use long-term memory tools for stable preferences, durable project facts, and recurring context. Do not save secrets, API keys, tokens, passwords, or sensitive personal data to memory.',
       'Keep parent context small and use scratchpad tools for compact notes during multi-source or multi-step tasks.',
       'Do not build OAuth flows yourself. Do not claim live external changes happened unless the tool result confirms them.',
     ].join(' '),
@@ -103,6 +109,7 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
         return result.text;
       }),
       ...ziloDocsTools,
+      ...memoryTools,
       ...scratchpadTools,
       ...composioTools,
     },

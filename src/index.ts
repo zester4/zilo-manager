@@ -15,6 +15,8 @@ import { memoryBackendName } from './memory/redis.js';
 import { printError, printJson, printMarkdown, printProgress } from './cli/format.js';
 import { createTerminalConfirmation } from './cli/confirm.js';
 import { getComposioStatus } from './tools/composio.tool.js';
+import { getResolvedConfigSummary, runDoctor, type DoctorCheck } from './cli/doctor.js';
+import { clearMemories, forget, listMemories, recall, remember } from './memory/long-term.js';
 
 type TextAgentFactory = () => { generate: (input: { prompt: string }) => Promise<{ text: string }> };
 
@@ -30,6 +32,13 @@ async function runAgentText(agentFactory: TextAgentFactory, prompt: string) {
   requireGatewayAuth();
   const result = await agentFactory().generate({ prompt });
   await printResult(result.text);
+}
+
+function printDoctorChecks(checks: DoctorCheck[]) {
+  for (const check of checks) {
+    const label = check.status.toUpperCase().padEnd(4);
+    console.log(`${label} ${check.name}: ${check.detail}`);
+  }
 }
 
 function friendlyError(error: unknown) {
@@ -69,6 +78,128 @@ program
         ...(options.redisUrl !== undefined ? { redisUrl: options.redisUrl } : {}),
         ...(options.redisToken !== undefined ? { redisToken: options.redisToken } : {}),
       });
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('doctor')
+  .option('--live', 'also run live Gateway and Composio checks')
+  .option('-s, --session <id>', 'Composio/ZilMate session id for live checks', 'default')
+  .option('--json', 'print JSON output')
+  .description('Check local ZilMate config, keys, memory, Node, and optional live integrations')
+  .action(async (options: { live?: boolean; session: string; json?: boolean }) => {
+    try {
+      const checks = await runDoctor({ live: Boolean(options.live), sessionId: options.session });
+      if (options.json) {
+        printJson(checks);
+      } else {
+        printDoctorChecks(checks);
+      }
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+const envCommand = program
+  .command('env')
+  .description('Inspect ZilMate environment setup');
+
+envCommand
+  .command('check')
+  .option('--live', 'also run live Gateway and Composio checks')
+  .option('-s, --session <id>', 'Composio/ZilMate session id for live checks', 'default')
+  .option('--json', 'print JSON output')
+  .description('Alias for zilmate doctor focused on environment readiness')
+  .action(async (options: { live?: boolean; session: string; json?: boolean }) => {
+    try {
+      const checks = await runDoctor({ live: Boolean(options.live), sessionId: options.session });
+      if (options.json) {
+        printJson(checks);
+      } else {
+        printDoctorChecks(checks);
+      }
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('config')
+  .description('Show sanitized ZilMate configuration without secrets')
+  .action(async () => {
+    try {
+      printJson(await getResolvedConfigSummary());
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('remember')
+  .argument('<note...>', 'memory text to save')
+  .option('-t, --tag <tag...>', 'optional memory tags')
+  .description('Save a durable long-term ZilMate memory')
+  .action(async (note: string[], options: { tag?: string[] }) => {
+    try {
+      const memory = await remember(note.join(' '), options.tag ?? []);
+      printJson(memory);
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('recall')
+  .argument('[query...]', 'memory query; omitted means recent memories')
+  .option('-l, --limit <number>', 'maximum memories to return', '8')
+  .description('Recall durable long-term ZilMate memories')
+  .action(async (query: string[] | undefined, options: { limit: string }) => {
+    try {
+      const limit = Number.parseInt(options.limit, 10);
+      printJson(await recall((query ?? []).join(' '), Number.isFinite(limit) ? limit : 8));
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('forget')
+  .argument('[id]', 'memory id to forget')
+  .option('--all', 'forget all memories')
+  .description('Forget one durable memory by id')
+  .action(async (id: string | undefined, options: { all?: boolean }) => {
+    try {
+      if (options.all) {
+        await clearMemories();
+        printJson({ cleared: true });
+        return;
+      }
+      if (!id) throw new Error('Pass a memory id, or use --all to clear every memory.');
+      printJson({ id, deleted: await forget(id) });
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+const memoryCommand = program
+  .command('memory')
+  .description('Manage durable long-term ZilMate memory');
+
+memoryCommand
+  .command('list')
+  .description('List all durable long-term memories')
+  .action(async () => {
+    try {
+      printJson(await listMemories());
     } catch (error) {
       printError(friendlyError(error));
       process.exitCode = 1;

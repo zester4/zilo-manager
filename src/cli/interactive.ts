@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { requireGatewayAuth } from '../config/env.js';
 import { runManager } from '../agents/manager.js';
 import { loadTurns, saveTurns, type ChatTurn } from '../memory/history.js';
+import { recall } from '../memory/long-term.js';
 import { memoryBackendName } from '../memory/redis.js';
 import { printAssistant, printProgress, printStatus, printTitle, printUserPrompt } from './format.js';
 import { createReadlineConfirmation } from './confirm.js';
@@ -14,6 +15,11 @@ function transcript(turns: ChatTurn[]) {
     .slice(-10)
     .map((turn) => `${turn.role === 'user' ? 'User' : 'ZilMate'}: ${turn.content}`)
     .join('\n');
+}
+
+function memoryBlock(memories: Awaited<ReturnType<typeof recall>>) {
+  if (memories.length === 0) return '';
+  return memories.map((memory) => `- [${memory.id}] ${memory.text}${memory.tags.length ? ` (tags: ${memory.tags.join(', ')})` : ''}`).join('\n');
 }
 
 export async function startInteractiveChat(sessionId = 'default') {
@@ -53,9 +59,10 @@ export async function startInteractiveChat(sessionId = 'default') {
       }
 
       const context = transcript(turns);
+      const relevantMemory = memoryBlock(await recall(message, 6));
       const prompt = context
-        ? `Conversation so far:\n${context}\n\nNew user message:\n${message}\n\nAnswer as ZilMate. Delegate to subagents when useful and return a concise final answer.`
-        : `${message}\n\nAnswer as ZilMate. Delegate to subagents when useful and return a concise final answer.`;
+        ? `Conversation so far:\n${context}\n\n${relevantMemory ? `Relevant long-term memory:\n${relevantMemory}\n\n` : ''}New user message:\n${message}\n\nAnswer as ZilMate. Delegate to subagents when useful and return a concise final answer.`
+        : `${relevantMemory ? `Relevant long-term memory:\n${relevantMemory}\n\n` : ''}${message}\n\nAnswer as ZilMate. Delegate to subagents when useful and return a concise final answer.`;
 
       const response = await runManager(prompt, {
         progress: printProgress,
