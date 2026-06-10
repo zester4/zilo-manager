@@ -32,6 +32,10 @@ const writeFragments = [
 ];
 
 type ComposioClient = Composio<VercelProvider>;
+type InnerToolCall = {
+  slug: string;
+  arguments?: Record<string, unknown>;
+};
 
 let client: ComposioClient | undefined;
 
@@ -60,8 +64,22 @@ function isWriteLikeTool(toolSlug: string) {
   return writeFragments.some((fragment) => upper.includes(fragment));
 }
 
+function parseJsonish(value: string): unknown {
+  const trimmed = value.trim();
+  if (!trimmed || !/^[{[]/.test(trimmed)) return value;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
 function findToolSlugs(value: unknown): string[] {
-  if (typeof value === 'string') return /^[A-Z0-9]+_[A-Z0-9_]+$/.test(value) ? [value] : [];
+  if (typeof value === 'string') {
+    const parsed = parseJsonish(value);
+    if (parsed !== value) return findToolSlugs(parsed);
+    return value.match(/[A-Z0-9]+_[A-Z0-9_]+/g) ?? [];
+  }
   if (!value || typeof value !== 'object') return [];
   if (Array.isArray(value)) return value.flatMap(findToolSlugs);
 
@@ -71,11 +89,49 @@ function findToolSlugs(value: unknown): string[] {
   return [...matches, ...Object.values(record).flatMap(findToolSlugs)];
 }
 
+function getStringField(record: Record<string, unknown>, fields: string[]) {
+  for (const field of fields) {
+    const value = record[field];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  const parsed = typeof value === 'string' ? parseJsonish(value) : value;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+  return parsed as Record<string, unknown>;
+}
+
+function extractInnerTools(params: unknown): InnerToolCall[] {
+  const record = asRecord(params);
+  if (!record) return [];
+  const rawTools = record.tools ?? record.tool_calls ?? record.toolCalls;
+  const parsedTools = typeof rawTools === 'string' ? parseJsonish(rawTools) : rawTools;
+  if (!Array.isArray(parsedTools)) return [];
+
+  return parsedTools
+    .map((item) => {
+      const tool = asRecord(item);
+      if (!tool) return null;
+      const slug = getStringField(tool, ['tool_slug', 'toolSlug', 'slug', 'tool']);
+      if (!slug) return null;
+      const rawArguments = tool.arguments ?? tool.args ?? tool.input;
+      const args = asRecord(rawArguments);
+      return {
+        slug,
+        ...(args ? { arguments: args } : {}),
+      } satisfies InnerToolCall;
+    })
+    .filter((tool): tool is InnerToolCall => Boolean(tool));
+}
+
 function classifyTool(toolSlug: string, params: unknown) {
   const upper = toolSlug.toUpperCase();
   if (safeMetaTools.has(upper)) return 'read';
   if (upper === 'COMPOSIO_MULTI_EXECUTE_TOOL') {
-    const slugs = [...new Set(findToolSlugs(params))].filter((slug) => slug.toUpperCase() !== upper);
+    const inner = extractInnerTools(params).map((toolCall) => toolCall.slug);
+    const slugs = [...new Set(inner.length > 0 ? inner : findToolSlugs(params))].filter((slug) => slug.toUpperCase() !== upper);
     if (slugs.length === 0) return 'write';
     return slugs.every(isReadOnlyTool) ? 'read' : 'write';
   }
@@ -84,14 +140,67 @@ function classifyTool(toolSlug: string, params: unknown) {
   return 'write';
 }
 
-function summarizeParams(params: unknown) {
+function labelFromToolSlug(toolSlug: string) {
+  const [, ...parts] = toolSlug.toLowerCase().split('_');
+  return parts.length > 0
+    ? parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+    : toolSlug;
+}
+
+function summarizeValue(value: unknown) {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  if (typeof value === 'string') return value.length > 80 ? `${value.slice(0, 77)}...` : value;
+  if (typeof value === 'number') return String(value);
   try {
-    const json = JSON.stringify(params);
-    if (!json) return 'External app action';
-    return json.length > 180 ? `${json.slice(0, 177)}...` : json;
+    const json = JSON.stringify(value);
+    return json.length > 80 ? `${json.slice(0, 77)}...` : json;
   } catch {
-    return 'External app action';
+    return String(value);
   }
+}
+
+function friendlyDetails(toolCall: InnerToolCall) {
+  const args = toolCall.arguments ?? {};
+  const preferred = ['to', 'recipient', 'subject', 'query', 'max_results', 'limit', 'user_id', 'include_payload', 'verbose'];
+  const entries = [
+    ...preferred.filter((key) => key in args).map((key) => [key, args[key]] as const),
+    ...Object.entries(args).filter(([key]) => !preferred.includes(key)).slice(0, 6),
+  ];
+
+  return entries
+    .map(([key, value]) => {
+      const summarized = summarizeValue(value);
+      if (!summarized) return null;
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+      return `${label}: ${summarized}`;
+    })
+    .filter((item): item is string => Boolean(item))
+    .slice(0, 8);
+}
+
+function createConfirmationDisplay(toolkitSlug: string, toolSlug: string, params: unknown) {
+  const innerTools = toolSlug.toUpperCase() === 'COMPOSIO_MULTI_EXECUTE_TOOL' ? extractInnerTools(params) : [];
+  const targetTools = innerTools.length > 0 ? innerTools.map((toolCall) => toolCall.slug) : [toolSlug];
+  const fallbackArgs = asRecord(params);
+  const primary: InnerToolCall = innerTools[0] ?? {
+    slug: toolSlug,
+    ...(fallbackArgs ? { arguments: fallbackArgs } : {}),
+  };
+  const writeTools = targetTools.filter((slug) => !isReadOnlyTool(slug));
+  const details = innerTools.length === 1 ? friendlyDetails(primary) : innerTools.map((toolCall) => `${toolCall.slug}: ${labelFromToolSlug(toolCall.slug)}`);
+
+  return {
+    toolkitSlug: innerTools.length === 1 ? innerTools[0]!.slug.split('_')[0] || toolkitSlug : toolkitSlug,
+    toolSlug,
+    targetTools,
+    action: innerTools.length === 1
+      ? labelFromToolSlug(primary.slug)
+      : `Run ${targetTools.length} external app action${targetTools.length === 1 ? '' : 's'}`,
+    access: writeTools.length === 0 ? 'Read-only' as const : 'Write' as const,
+    details,
+    summary: details.length > 0 ? details.join('; ') : 'External app action',
+  };
 }
 
 async function getOrCreateSession(chatSessionId: string) {
@@ -119,9 +228,7 @@ function executionGuard(): SessionMetaToolOptions {
       if (classification === 'read') return params;
 
       const approved = await requestConfirmation({
-        toolkitSlug,
-        toolSlug,
-        summary: summarizeParams(params),
+        ...createConfirmationDisplay(toolkitSlug, toolSlug, params),
       });
 
       if (!approved) {

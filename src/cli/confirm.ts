@@ -4,11 +4,17 @@ import chalk from 'chalk';
 import type { ConfirmationHandler } from '../runtime/confirm.js';
 
 export function createReadlineConfirmation(rl: readline.Interface): ConfirmationHandler {
-  return async ({ toolkitSlug, toolSlug, summary }) => {
-    console.log(chalk.yellow('\nComposio wants to run a write-like external app action.'));
-    console.log(`${chalk.gray('Toolkit:')} ${toolkitSlug}`);
-    console.log(`${chalk.gray('Tool:')} ${toolSlug}`);
-    console.log(`${chalk.gray('Summary:')} ${summary}`);
+  return async ({ toolkitSlug, toolSlug, summary, action, access, targetTools, details }) => {
+    console.log(chalk.yellow(`\nZilMate wants to use ${toolkitSlug}`));
+    console.log(`${chalk.gray('Action:')} ${action || 'External app action'}`);
+    console.log(`${chalk.gray('Access:')} ${access || 'Write'}`);
+    console.log(`${chalk.gray('Tool:')} ${(targetTools && targetTools.length > 0) ? targetTools.join(', ') : toolSlug}`);
+    if (details && details.length > 0) {
+      console.log(chalk.gray('Details:'));
+      for (const detail of details) console.log(`- ${detail}`);
+    } else {
+      console.log(`${chalk.gray('Details:')} ${summary}`);
+    }
     const answer = (await rl.question('Proceed? (y/N) ')).trim().toLowerCase();
     return answer === 'y' || answer === 'yes';
   };

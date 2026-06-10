@@ -2,6 +2,10 @@ export type ConfirmationRequest = {
   toolkitSlug: string;
   toolSlug: string;
   summary: string;
+  action?: string;
+  access?: 'Read-only' | 'Write';
+  targetTools?: string[];
+  details?: string[];
 };
 
 export type ConfirmationHandler = (request: ConfirmationRequest) => Promise<boolean>;
