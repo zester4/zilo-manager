@@ -243,6 +243,16 @@ zilmate triggers listen --trigger-slug GMAIL_NEW_EMAIL_EVENT --once
 
 This is terminal-local. For persistent public callbacks, use webhook/tunnel support later.
 
+The manager agent also has trigger tools. In `zilmate talk`, you can ask:
+
+```text
+show me GitHub trigger types
+prepare a branch-created trigger for zester4/zilo-manager
+create that trigger
+```
+
+ZilMate should discover current trigger slugs first, inspect the trigger schema, prefer a dry-run payload, and ask for confirmation before creating a real trigger.
+
 ## Model Notes
 
 - Manager/orchestration default: `minimax/minimax-m3`.

@@ -15,6 +15,7 @@ import { createScratchpadTools } from '../tools/scratchpad.tool.js';
 import { ziloDocsTools } from '../tools/zilo-docs.tool.js';
 import { createComposioTools } from '../tools/composio.tool.js';
 import { memoryTools } from '../tools/memory.tool.js';
+import { triggerTools } from '../tools/triggers.tool.js';
 
 function agentInput(prompt: string, abortSignal?: AbortSignal) {
   return abortSignal ? { prompt, abortSignal } : { prompt };
@@ -36,6 +37,10 @@ function describeTool(name: string) {
     listZiloDocs: 'Listing Zilo docs',
     readZiloDoc: 'Reading Zilo doc',
     searchZiloDocs: 'Searching Zilo docs',
+    listTriggerTypes: 'Listing trigger types',
+    showTriggerType: 'Loading trigger schema',
+    listTriggers: 'Listing triggers',
+    createTrigger: 'Creating trigger',
     COMPOSIO_SEARCH_TOOLS: 'Searching Composio tools',
     COMPOSIO_GET_TOOL_SCHEMAS: 'Loading Composio tool schemas',
     COMPOSIO_MANAGE_CONNECTIONS: 'Managing Composio connection',
@@ -82,6 +87,8 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
       'Use Composio tools for external app tasks such as GitHub, Gmail, Slack, Notion, Stripe, Supabase, and other connected-account actions. If a needed app is not connected, use Composio connection management and surface the connect link to the user.',
       'For Composio, prefer this flow: use COMPOSIO_SEARCH_TOOLS to find relevant external app tools, COMPOSIO_GET_TOOL_SCHEMAS to inspect required arguments, COMPOSIO_MANAGE_CONNECTIONS to create or show app connection links, and COMPOSIO_MULTI_EXECUTE_TOOL to execute selected tools after arguments are clear.',
       'When COMPOSIO_MANAGE_CONNECTIONS returns an authorization or connect URL, print that URL plainly and tell the user to open it to connect their account before retrying the app action.',
+      'For app events, use trigger tools: listTriggerTypes to discover current trigger slugs, showTriggerType to inspect required config, listTriggers to inspect existing trigger instances, and createTrigger only after config is clear. Prefer dryRun first, then ask for confirmation before creating a real trigger.',
+      'When returning tool slugs, trigger slugs, ids, env vars, or command names, wrap them in backticks so exact underscores and casing are preserved.',
       'Use research for current web or documentation questions. Use specialized subagents for focused chat, quick help, post copy, image assets, and research.',
       'Use long-term memory tools for stable preferences, durable project facts, and recurring context. Do not save secrets, API keys, tokens, passwords, or sensitive personal data to memory.',
       'Keep parent context small and use scratchpad tools for compact notes during multi-source or multi-step tasks.',
@@ -110,6 +117,7 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
       }),
       ...ziloDocsTools,
       ...memoryTools,
+      ...triggerTools,
       ...scratchpadTools,
       ...composioTools,
     },

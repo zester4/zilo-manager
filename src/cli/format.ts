@@ -8,25 +8,29 @@ const divider = (color = chalk.gray) => color('─'.repeat(Math.min(maxWidth(), 
 
 function stripInline(markdown: string) {
   return markdown
+    .replace(/\\_/g, '_')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/__([^_]+)__/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/_([^_]+)_/g, '$1')
     .trim();
+}
+
+function protectMachineTokens(markdown: string) {
+  return markdown.replace(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/g, (token) => token.replace(/_/g, '\\_'));
 }
 
 function renderInline(markdown: string) {
   return markdown
+    .replace(/\\_/g, '_')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, href) => `${chalk.blue.underline(text)} ${chalk.gray(`(${href})`)}`)
-    .replace(/`([^`]+)`/g, (_match, code) => chalk.yellow(code))
+    .replace(/`([^`]+)`/g, (_match, code) => chalk.yellow(String(code).replace(/\\_/g, '_')))
     .replace(/\*\*([^*]+)\*\*/g, (_match, text) => chalk.bold(text))
     .replace(/__([^_]+)__/g, (_match, text) => chalk.bold(text))
-    .replace(/\*([^*]+)\*/g, (_match, text) => chalk.italic(text))
-    .replace(/_([^_]+)_/g, (_match, text) => chalk.italic(text));
+    .replace(/\*([^*]+)\*/g, (_match, text) => chalk.italic(text));
 }
 
 function renderHeading(token: Tokens.Heading) {
@@ -105,7 +109,7 @@ function renderTokens(tokens: unknown[], indent = 0): string {
 }
 
 export function renderMarkdown(markdown: string) {
-  const cleaned = markdown.trim();
+  const cleaned = protectMachineTokens(markdown.trim());
   if (!cleaned) return '';
   return renderTokens(marked.lexer(cleaned));
 }

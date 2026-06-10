@@ -29,39 +29,40 @@ type TriggerListenOptions = {
   once?: boolean;
 };
 
-function composio() {
+export function getComposioTriggerClient() {
   requireComposio();
   return new Composio({ apiKey: env.composioApiKey ?? null });
 }
 
-function parseLimit(value: string | undefined, fallback: number) {
+export function parseLimit(value: string | number | undefined, fallback: number) {
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : fallback;
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function printJson(value: unknown) {
+export function printJson(value: unknown) {
   console.log(JSON.stringify(value, null, 2));
 }
 
-function formatKey(key: string) {
+export function formatTriggerConfigKey(key: string) {
   return key.replace(/^--?/, '').replace(/-([a-z])/g, (_match, char: string) => char.toUpperCase());
 }
 
-function parseValue(value: string) {
+export function parseTriggerConfigValue(value: string) {
   if (value === 'true') return true;
   if (value === 'false') return false;
   if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
   return value;
 }
 
-function parseUnknownConfig(args: string[]) {
+export function parseUnknownTriggerConfig(args: string[]) {
   const config: Record<string, unknown> = {};
 
   for (let index = 0; index < args.length; index += 1) {
     const raw = args[index];
     if (!raw?.startsWith('--')) continue;
     const [rawKey, inlineValue] = raw.split('=', 2);
-    const key = formatKey(rawKey!);
+    const key = formatTriggerConfigKey(rawKey!);
     const next = args[index + 1];
     const value = inlineValue !== undefined
       ? inlineValue
@@ -73,16 +74,16 @@ function parseUnknownConfig(args: string[]) {
 
     if (config[key] !== undefined) {
       const existing = config[key];
-      config[key] = Array.isArray(existing) ? [...existing, parseValue(value)] : [existing, parseValue(value)];
+      config[key] = Array.isArray(existing) ? [...existing, parseTriggerConfigValue(value)] : [existing, parseTriggerConfigValue(value)];
     } else {
-      config[key] = parseValue(value);
+      config[key] = parseTriggerConfigValue(value);
     }
   }
 
   return config;
 }
 
-function parseConfigJson(value: string | undefined) {
+export function parseTriggerConfigJson(value: string | undefined) {
   if (!value) return {};
   const parsed = JSON.parse(value) as unknown;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -91,13 +92,13 @@ function parseConfigJson(value: string | undefined) {
   return parsed as Record<string, unknown>;
 }
 
-function compact(value: unknown, max = 180) {
+export function compact(value: unknown, max = 180) {
   if (value === undefined || value === null || value === '') return undefined;
   const text = typeof value === 'string' ? value : JSON.stringify(value);
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
 
-function pickSummary(payload: Record<string, unknown> | undefined) {
+export function pickTriggerEventSummary(payload: Record<string, unknown> | undefined) {
   if (!payload) return '';
   const keys = [
     'subject',
@@ -130,7 +131,7 @@ function printTriggerEvent(event: IncomingTriggerPayload, asJson: boolean) {
     return;
   }
 
-  const summary = pickSummary(event.payload);
+  const summary = pickTriggerEventSummary(event.payload);
   const stamp = new Date().toLocaleTimeString();
   const heading = `[${stamp}] [${event.triggerSlug}]`;
   console.log(summary ? `${heading} ${summary}` : heading);
@@ -138,7 +139,7 @@ function printTriggerEvent(event: IncomingTriggerPayload, asJson: boolean) {
 }
 
 export async function listTriggerTypes(toolkit: string | undefined, options: TriggerTypeOptions) {
-  const client = composio();
+  const client = getComposioTriggerClient();
   const response = await client.triggers.listTypes({
     limit: parseLimit(options.limit, 25),
     ...(toolkit ? { toolkits: [toolkit] } : {}),
@@ -157,7 +158,7 @@ export async function listTriggerTypes(toolkit: string | undefined, options: Tri
 }
 
 export async function showTriggerType(triggerSlug: string, options: { json?: boolean }) {
-  const client = composio();
+  const client = getComposioTriggerClient();
   const triggerType = await client.triggers.getType(triggerSlug);
 
   if (options.json) {
@@ -175,7 +176,7 @@ export async function showTriggerType(triggerSlug: string, options: { json?: boo
 }
 
 export async function listTriggers(options: TriggerListOptions) {
-  const client = composio();
+  const client = getComposioTriggerClient();
   const response = await client.triggers.listActive({
     limit: parseLimit(options.limit, 25),
     ...(options.showDisabled ? { showDisabled: true } : {}),
@@ -199,12 +200,12 @@ export async function listTriggers(options: TriggerListOptions) {
 }
 
 export async function createTrigger(triggerSlug: string, options: TriggerCreateOptions, unknownArgs: string[]) {
-  const client = composio();
+  const client = getComposioTriggerClient();
   if (!env.zilmateUserId) throw new Error('Missing ZILMATE_USER_ID. Run `zilmate setup` first.');
 
   const triggerConfig = {
-    ...parseConfigJson(options.config),
-    ...parseUnknownConfig(unknownArgs),
+    ...parseTriggerConfigJson(options.config),
+    ...parseUnknownTriggerConfig(unknownArgs),
   };
 
   if (options.dryRun) {
@@ -225,7 +226,7 @@ export async function createTrigger(triggerSlug: string, options: TriggerCreateO
 }
 
 export async function listenToTriggers(options: TriggerListenOptions) {
-  const client = composio();
+  const client = getComposioTriggerClient();
   const filters: TriggerSubscribeParams = {
     ...(options.toolkit?.length ? { toolkits: options.toolkit } : {}),
     ...(options.trigger ? { triggerId: options.trigger } : {}),
