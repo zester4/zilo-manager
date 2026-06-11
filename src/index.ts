@@ -10,14 +10,22 @@ import { createPostAgent } from './agents/post.agent.js';
 import { createDocsResearchAgent } from './agents/docs-research.agent.js';
 import { generateImageAsset, isImageSize } from './tools/image-generate.tool.js';
 import { startInteractiveChat } from './cli/interactive.js';
-import { runSetup } from './cli/setup.js';
+import { runSetup, runVoiceSetup, setVoiceEnabled } from './cli/setup.js';
 import { memoryBackendName } from './memory/redis.js';
 import { printError, printJson, printMarkdown, printProgress } from './cli/format.js';
 import { createTerminalConfirmation } from './cli/confirm.js';
 import { getComposioStatus } from './tools/composio.tool.js';
-import { getResolvedConfigSummary, runDoctor, type DoctorCheck } from './cli/doctor.js';
+import { getResolvedConfigSummary, runDoctor } from './cli/doctor.js';
 import { clearMemories, forget, listMemories, recall, remember } from './memory/long-term.js';
 import { createTrigger, listenToTriggers, listTriggers, listTriggerTypes, showTriggerType } from './cli/triggers.js';
+import { cancelCliJob, createCliJob, listCliJobs, runCliJob, showCliJob, showCliJobLogs, startCliJobWorker } from './cli/jobs.js';
+import { printWelcomeScreen } from './cli/welcome.js';
+import { startDefaultLauncher, startMainMenu } from './cli/menu.js';
+import { printDoctorChecks } from './cli/health.js';
+import { printAppsStatus } from './cli/apps.js';
+import { printMemoryTable } from './cli/memory.js';
+import { printVoiceConfig, runVoiceAgentProbe, runVoiceDoctor, runVoiceTurn } from './cli/voice.js';
+import { printVersionStatus, runSelfUpdate } from './cli/update.js';
 
 type TextAgentFactory = () => { generate: (input: { prompt: string }) => Promise<{ text: string }> };
 
@@ -35,13 +43,6 @@ async function runAgentText(agentFactory: TextAgentFactory, prompt: string) {
   await printResult(result.text);
 }
 
-function printDoctorChecks(checks: DoctorCheck[]) {
-  for (const check of checks) {
-    const label = check.status.toUpperCase().padEnd(4);
-    console.log(`${label} ${check.name}: ${check.detail}`);
-  }
-}
-
 function friendlyError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   if (/AI_GATEWAY_API_KEY|VERCEL_OIDC_TOKEN|TAVILY_API_KEY|COMPOSIO_API_KEY|ZILMATE_USER_ID/.test(message)) return message;
@@ -52,7 +53,60 @@ const program = new Command();
 program
   .name('zilmate')
   .description('ZilMate CLI agent for ZiloShift workflows')
-  .version('1.0.0');
+  .version('1.1.0');
+
+program
+  .command('welcome')
+  .description('Show the ZilMate welcome dashboard')
+  .action(async () => {
+    try {
+      await printWelcomeScreen();
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('version')
+  .description('Show current ZilMate version and check npm for updates')
+  .action(async () => {
+    try {
+      await printVersionStatus(program.version() || 'unknown');
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('update')
+  .option('--tag <tag>', 'npm dist-tag or version to install', 'latest')
+  .option('--dry-run', 'show the update command without running it')
+  .description('Update the global ZilMate CLI/SDK from npm')
+  .action(async (options: { tag?: string; dryRun?: boolean }) => {
+    try {
+      await runSelfUpdate({
+        ...(options.tag !== undefined ? { tag: options.tag } : {}),
+        dryRun: Boolean(options.dryRun),
+      });
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('menu')
+  .description('Open the guided ZilMate main menu')
+  .action(async () => {
+    try {
+      await startMainMenu();
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
 
 program
   .command('setup')
@@ -65,8 +119,18 @@ program
   .option('--tavily-key <key>', 'optional Tavily API key for web research')
   .option('--redis-url <url>', 'optional Upstash Redis REST URL')
   .option('--redis-token <token>', 'optional Upstash Redis REST token')
+  .option('--jobs-enabled <true|false>', 'enable or disable background jobs')
+  .option('--qstash-token <token>', 'optional Upstash QStash token for hosted schedules')
+  .option('--job-webhook-url <url>', 'public job webhook URL for QStash callbacks')
+  .option('--job-webhook-secret <secret>', 'shared secret expected by hosted job webhook')
+  .option('--trigger-workflows-enabled <true|false>', 'enable or disable Composio trigger-to-job workflows')
+  .option('--deepgram-key <key>', 'optional Deepgram API key for realtime voice')
+  .option('--voice-enabled <true|false>', 'enable or disable realtime voice')
+  .option('--voice-listen-model <model>', 'Deepgram listen model, e.g. flux-general-en or flux-general-multi')
+  .option('--voice-tts-model <model>', 'Deepgram Aura TTS model, e.g. aura-2-thalia-en')
+  .option('--voice-language <language>', 'voice language, e.g. en or en-US')
   .description('Create or update a local .env file for ZilMate')
-  .action(async (options: { path: string; force?: boolean; yes?: boolean; aiGatewayKey?: string; composioKey?: string; zilmateUserId?: string; tavilyKey?: string; redisUrl?: string; redisToken?: string }) => {
+  .action(async (options: { path: string; force?: boolean; yes?: boolean; aiGatewayKey?: string; composioKey?: string; zilmateUserId?: string; tavilyKey?: string; redisUrl?: string; redisToken?: string; jobsEnabled?: string; qstashToken?: string; jobWebhookUrl?: string; jobWebhookSecret?: string; triggerWorkflowsEnabled?: string; deepgramKey?: string; voiceEnabled?: string; voiceListenModel?: string; voiceTtsModel?: string; voiceLanguage?: string }) => {
     try {
       await runSetup({
         path: options.path,
@@ -78,7 +142,238 @@ program
         ...(options.tavilyKey !== undefined ? { tavilyKey: options.tavilyKey } : {}),
         ...(options.redisUrl !== undefined ? { redisUrl: options.redisUrl } : {}),
         ...(options.redisToken !== undefined ? { redisToken: options.redisToken } : {}),
+        ...(options.jobsEnabled !== undefined ? { jobsEnabled: options.jobsEnabled } : {}),
+        ...(options.qstashToken !== undefined ? { qstashToken: options.qstashToken } : {}),
+        ...(options.jobWebhookUrl !== undefined ? { publicJobWebhookUrl: options.jobWebhookUrl } : {}),
+        ...(options.jobWebhookSecret !== undefined ? { jobWebhookSecret: options.jobWebhookSecret } : {}),
+        ...(options.triggerWorkflowsEnabled !== undefined ? { triggerWorkflowsEnabled: options.triggerWorkflowsEnabled } : {}),
+        ...(options.deepgramKey !== undefined ? { deepgramApiKey: options.deepgramKey } : {}),
+        ...(options.voiceEnabled !== undefined ? { voiceEnabled: options.voiceEnabled } : {}),
+        ...(options.voiceListenModel !== undefined ? { voiceListenModel: options.voiceListenModel } : {}),
+        ...(options.voiceTtsModel !== undefined ? { voiceTtsModel: options.voiceTtsModel } : {}),
+        ...(options.voiceLanguage !== undefined ? { voiceLanguage: options.voiceLanguage } : {}),
       });
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+const voice = program
+  .command('voice')
+  .description('Configure and run realtime ZilMate voice mode')
+  .action(async () => {
+    try {
+      printVoiceConfig();
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+voice
+  .command('setup')
+  .option('-p, --path <file>', 'environment file to create or update', '.env')
+  .option('-f, --force', 'skip the first update confirmation when the env file exists')
+  .option('--deepgram-key <key>', 'Deepgram API key for realtime voice')
+  .option('--voice-listen-model <model>', 'Deepgram listen model, e.g. flux-general-en or flux-general-multi')
+  .option('--voice-tts-model <model>', 'Deepgram Aura TTS model, e.g. aura-2-thalia-en')
+  .option('--voice-language <language>', 'voice language, e.g. en or en-US')
+  .description('Turn on realtime voice with a focused guided setup')
+  .action(async (options: { path: string; force?: boolean; deepgramKey?: string; voiceListenModel?: string; voiceTtsModel?: string; voiceLanguage?: string }) => {
+    try {
+      await runVoiceSetup({
+        path: options.path,
+        force: Boolean(options.force),
+        ...(options.deepgramKey !== undefined ? { deepgramApiKey: options.deepgramKey } : {}),
+        ...(options.voiceListenModel !== undefined ? { voiceListenModel: options.voiceListenModel } : {}),
+        ...(options.voiceTtsModel !== undefined ? { voiceTtsModel: options.voiceTtsModel } : {}),
+        ...(options.voiceLanguage !== undefined ? { voiceLanguage: options.voiceLanguage } : {}),
+      });
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+voice
+  .command('enable')
+  .option('-p, --path <file>', 'environment file to update', '.env')
+  .description('Enable realtime voice without opening .env')
+  .action(async (options: { path: string }) => {
+    try {
+      await setVoiceEnabled(true, { path: options.path });
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+voice
+  .command('disable')
+  .option('-p, --path <file>', 'environment file to update', '.env')
+  .description('Disable realtime voice without opening .env')
+  .action(async (options: { path: string }) => {
+    try {
+      await setVoiceEnabled(false, { path: options.path });
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+voice
+  .command('doctor')
+  .description('Check Deepgram realtime voice readiness')
+  .action(async () => {
+    try {
+      await runVoiceDoctor();
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+voice
+  .command('config')
+  .description('Show realtime voice configuration')
+  .action(() => {
+    try {
+      printVoiceConfig();
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+voice
+  .command('turn')
+  .argument('<transcript...>', 'spoken user text to route through the ZilMate voice brain')
+  .option('-s, --session <id>', 'persistent voice session id', 'voice-default')
+  .description('Test the ZilMate voice brain with a transcript')
+  .action(async (transcript: string[], options: { session: string }) => {
+    try {
+      await runVoiceTurn(transcript.join(' '), options.session);
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+voice
+  .command('agent-probe')
+  .description('Open a Deepgram Voice Agent session without attaching microphone audio')
+  .action(async () => {
+    try {
+      await runVoiceAgentProbe();
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+const jobs = program
+  .command('jobs')
+  .description('Manage ZilMate background jobs, schedules, and worker processing')
+  .action(async () => {
+    try {
+      await listCliJobs({});
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+jobs
+  .command('create')
+  .argument('<task...>', 'job task to queue')
+  .option('--schedule <schedule>', 'optional schedule, e.g. hourly, daily, every 15 minutes, cron:0 9 * * *')
+  .option('--run-at <date>', 'optional first run date/time')
+  .description('Queue a ZilMate background job')
+  .action(async (task: string[], options: { schedule?: string; runAt?: string }) => {
+    try {
+      await createCliJob(task.join(' '), options);
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+jobs
+  .command('list')
+  .option('--status <status>', 'filter by queued, running, succeeded, failed, or cancelled')
+  .option('-l, --limit <number>', 'maximum jobs to return', '25')
+  .description('List ZilMate jobs')
+  .action(async (options: { status?: string; limit?: string }) => {
+    try {
+      await listCliJobs(options);
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+jobs
+  .command('status')
+  .argument('<id>', 'job id')
+  .description('Show one ZilMate job')
+  .action(async (id: string) => {
+    try {
+      await showCliJob(id);
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+jobs
+  .command('logs')
+  .argument('<id>', 'job id')
+  .description('Show logs for one ZilMate job')
+  .action(async (id: string) => {
+    try {
+      await showCliJobLogs(id);
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+jobs
+  .command('run')
+  .argument('<id>', 'job id')
+  .description('Run one ZilMate job now')
+  .action(async (id: string) => {
+    try {
+      await runCliJob(id);
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+jobs
+  .command('worker')
+  .option('-i, --interval <seconds>', 'poll interval in seconds', '10')
+  .option('--once', 'process due jobs once and exit')
+  .option('--quiet', 'suppress worker status messages')
+  .description('Start the local ZilMate job worker')
+  .action(async (options: { interval?: string; once?: boolean; quiet?: boolean }) => {
+    try {
+      await startCliJobWorker(options);
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
+jobs
+  .command('cancel')
+  .argument('<id>', 'job id')
+  .description('Cancel one ZilMate job')
+  .action(async (id: string) => {
+    try {
+      await cancelCliJob(id);
     } catch (error) {
       printError(friendlyError(error));
       process.exitCode = 1;
@@ -193,14 +488,22 @@ program
 
 const memoryCommand = program
   .command('memory')
-  .description('Manage durable long-term ZilMate memory');
+  .description('Manage durable long-term ZilMate memory')
+  .action(async () => {
+    try {
+      printMemoryTable(await listMemories());
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
 
 memoryCommand
   .command('list')
   .description('List all durable long-term memories')
   .action(async () => {
     try {
-      printJson(await listMemories());
+      printMemoryTable(await listMemories());
     } catch (error) {
       printError(friendlyError(error));
       process.exitCode = 1;
@@ -209,7 +512,15 @@ memoryCommand
 
 const apps = program
   .command('apps')
-  .description('Manage external app tooling through Composio');
+  .description('Manage external app tooling through Composio')
+  .action(async () => {
+    try {
+      printAppsStatus(await getComposioStatus());
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
 
 apps
   .command('status')
@@ -218,10 +529,7 @@ apps
   .action(async (options: { session: string }) => {
     try {
       const status = await getComposioStatus(options.session);
-      printJson(status);
-      if (!status.configured) {
-        console.log('Composio is not configured. Run `zilmate setup` and add `COMPOSIO_API_KEY` to enable GitHub/Gmail/Slack/Stripe/Supabase-style external app tools.');
-      }
+      printAppsStatus(status);
     } catch (error) {
       printError(friendlyError(error));
       process.exitCode = 1;
@@ -452,10 +760,14 @@ program
     }
   });
 
-program.parseAsync(process.argv).catch((error) => {
+if (process.argv.length <= 2) {
+  await startDefaultLauncher();
+} else {
+  await program.parseAsync(process.argv).catch((error) => {
   printError(friendlyError(error));
   process.exitCode = 1;
-});
+  });
+}
 
 
 

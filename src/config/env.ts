@@ -23,6 +23,20 @@ export type Env = {
   zilmateUserId: string | undefined;
   upstashRedisRestUrl: string | undefined;
   upstashRedisRestToken: string | undefined;
+  zilmateJobsEnabled: boolean;
+  upstashQstashToken: string | undefined;
+  zilmatePublicJobWebhookUrl: string | undefined;
+  zilmateJobWebhookSecret: string | undefined;
+  zilmateTriggerWorkflowsEnabled: boolean;
+  deepgramApiKey: string | undefined;
+  zilmateVoiceEnabled: boolean;
+  zilmateVoiceMode: string;
+  zilmateVoiceListenModel: string;
+  zilmateVoiceListenVersion: string;
+  zilmateVoiceTtsModel: string;
+  zilmateVoiceLanguage: string;
+  zilmateVoiceLanguageHints: string[];
+  zilmateVoiceBargeIn: boolean;
   managerModel: string;
   helpModel: string | undefined;
   postModel: string | undefined;
@@ -40,6 +54,20 @@ export const env: Env = {
   zilmateUserId: process.env.ZILMATE_USER_ID,
   upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL,
   upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN,
+  zilmateJobsEnabled: process.env.ZILMATE_JOBS_ENABLED === 'true',
+  upstashQstashToken: process.env.UPSTASH_QSTASH_TOKEN,
+  zilmatePublicJobWebhookUrl: process.env.ZILMATE_PUBLIC_JOB_WEBHOOK_URL,
+  zilmateJobWebhookSecret: process.env.ZILMATE_JOB_WEBHOOK_SECRET,
+  zilmateTriggerWorkflowsEnabled: process.env.ZILMATE_TRIGGER_WORKFLOWS_ENABLED === 'true',
+  deepgramApiKey: process.env.DEEPGRAM_API_KEY,
+  zilmateVoiceEnabled: process.env.ZILMATE_VOICE_ENABLED === 'true',
+  zilmateVoiceMode: process.env.ZILMATE_VOICE_MODE || 'agent',
+  zilmateVoiceListenModel: process.env.ZILMATE_VOICE_LISTEN_MODEL || 'flux-general-en',
+  zilmateVoiceListenVersion: process.env.ZILMATE_VOICE_LISTEN_VERSION || 'v2',
+  zilmateVoiceTtsModel: process.env.ZILMATE_VOICE_TTS_MODEL || 'aura-2-thalia-en',
+  zilmateVoiceLanguage: process.env.ZILMATE_VOICE_LANGUAGE || 'en',
+  zilmateVoiceLanguageHints: (process.env.ZILMATE_VOICE_LANGUAGE_HINTS || '').split(',').map((item) => item.trim()).filter(Boolean),
+  zilmateVoiceBargeIn: process.env.ZILMATE_VOICE_BARGE_IN !== 'false',
   managerModel: process.env.ZILO_MANAGER_MODEL || 'minimax/minimax-m3',
   helpModel: process.env.ZILO_HELP_MODEL || undefined,
   postModel: process.env.ZILO_POST_MODEL || undefined,
@@ -81,4 +109,19 @@ export function requireComposio() {
 
 export function hasRedis() {
   return Boolean(env.upstashRedisRestUrl && env.upstashRedisRestToken);
+}
+
+export function hasQStash() {
+  return Boolean(env.upstashQstashToken && env.zilmatePublicJobWebhookUrl);
+}
+
+export function hasDeepgram() {
+  return Boolean(env.deepgramApiKey);
+}
+
+export function requireDeepgram() {
+  if (!env.deepgramApiKey) {
+    throw new Error('Missing DEEPGRAM_API_KEY. Run `zilmate setup` to enable realtime voice mode.');
+  }
+  return env.deepgramApiKey;
 }

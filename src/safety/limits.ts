@@ -1,6 +1,6 @@
 ﻿export const limits = {
-  managerSteps: 8,
-  subagentSteps: 5,
+  managerSteps: 50,
+  subagentSteps: 25,
   researchResults: 5,
   docsCacheTtlMs: 1000 * 60 * 60 * 24,
 };

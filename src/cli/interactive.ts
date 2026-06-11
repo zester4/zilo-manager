@@ -6,8 +6,9 @@ import { runManager } from '../agents/manager.js';
 import { loadTurns, saveTurns, type ChatTurn } from '../memory/history.js';
 import { recall } from '../memory/long-term.js';
 import { memoryBackendName } from '../memory/redis.js';
-import { printAssistant, printProgress, printStatus, printTitle, printUserPrompt } from './format.js';
+import { printAssistant, printProgress, printStatus, printUserPrompt, printZilMateBanner } from './format.js';
 import { createReadlineConfirmation } from './confirm.js';
+import { checkVoiceRuntime, getVoiceConfig } from '../voice/deepgram.js';
 
 function transcript(turns: ChatTurn[]) {
   if (turns.length === 0) return '';
@@ -27,12 +28,13 @@ export async function startInteractiveChat(sessionId = 'default') {
   const rl = readline.createInterface({ input, output });
   let turns = await loadTurns(sessionId);
   const runId = randomUUID();
+  let voiceMode = false;
 
-  printTitle('ZilMate interactive chat', 'Persistent manager chat with subagent delegation');
+  printZilMateBanner('Personal assistant CLI with subagents, tools, memory, and jobs.');
   printStatus('Session:', sessionId);
   printStatus('Memory:', memoryBackendName());
   printStatus('Run:', runId);
-  console.log('Type /exit to quit, /clear to clear this session, or /help for commands.\n');
+  console.log('Type /exit to quit, /clear to clear this session, /voice to start voice mode, /voice -q to stop voice mode, or /help for commands.\n');
 
   try {
     while (true) {
@@ -48,7 +50,29 @@ export async function startInteractiveChat(sessionId = 'default') {
       if (!message) continue;
       if (message === '/exit' || message === '/quit') break;
       if (message === '/help') {
-        console.log('Commands: /exit, /quit, /clear, /help');
+        console.log('Commands: /exit, /quit, /clear, /help, /voice, /voice -q');
+        continue;
+      }
+      if (message === '/voice' || message === '/voice on') {
+        const config = getVoiceConfig();
+        const checks = await checkVoiceRuntime();
+        const failing = checks.filter((check) => !check.ok);
+        if (!config.configured) {
+          console.log('Voice needs DEEPGRAM_API_KEY. Run `zilmate voice setup` first.');
+          continue;
+        }
+        if (failing.some((check) => check.name === 'Deepgram SDK')) {
+          console.log('Voice needs the Deepgram SDK installed. Run `npm install`, then `zilmate voice doctor`.');
+          continue;
+        }
+        voiceMode = true;
+        console.log(`Voice mode is on for this chat session. Model: ${config.listenModel} -> ${config.ttsModel}.`);
+        console.log('Terminal live microphone streaming is still being wired; for now, type what you said and ZilMate will treat it as a voice turn.');
+        continue;
+      }
+      if (message === '/voice -q' || message === '/voice off' || message === '/voice stop') {
+        voiceMode = false;
+        console.log('Voice mode is off for this chat session.');
         continue;
       }
       if (message === '/clear') {
@@ -60,9 +84,12 @@ export async function startInteractiveChat(sessionId = 'default') {
 
       const context = transcript(turns);
       const relevantMemory = memoryBlock(await recall(message, 6));
+      const voiceInstruction = voiceMode
+        ? 'This is a voice-mode turn. Answer in a natural spoken style: brief, direct, conversational, and easy to listen to.'
+        : 'Answer as ZilMate. Delegate to subagents when useful and return a concise final answer.';
       const prompt = context
-        ? `Conversation so far:\n${context}\n\n${relevantMemory ? `Relevant long-term memory:\n${relevantMemory}\n\n` : ''}New user message:\n${message}\n\nAnswer as ZilMate. Delegate to subagents when useful and return a concise final answer.`
-        : `${relevantMemory ? `Relevant long-term memory:\n${relevantMemory}\n\n` : ''}${message}\n\nAnswer as ZilMate. Delegate to subagents when useful and return a concise final answer.`;
+        ? `Conversation so far:\n${context}\n\n${relevantMemory ? `Relevant long-term memory:\n${relevantMemory}\n\n` : ''}New user message:\n${message}\n\n${voiceInstruction}`
+        : `${relevantMemory ? `Relevant long-term memory:\n${relevantMemory}\n\n` : ''}${message}\n\n${voiceInstruction}`;
 
       const response = await runManager(prompt, {
         progress: printProgress,

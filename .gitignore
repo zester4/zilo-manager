@@ -6,6 +6,7 @@ node_modules/
 dist/
 outputs/
 .zilo-manager/
+.npm-cache/
 
 .agents/
 skills-lock.json

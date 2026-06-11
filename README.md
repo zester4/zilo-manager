@@ -16,6 +16,15 @@ zilmate setup
 zilmate --help
 ```
 
+Running `zilmate` with no arguments opens the status dashboard and then the guided launcher menu. If the AI Gateway key is missing, the launcher offers setup before starting chat.
+
+When a new CLI/SDK release is published, users can update without remembering npm commands:
+
+```powershell
+zilmate update
+zilmate version
+```
+
 ### GitHub/private install
 
 Before npm publishing, install directly from the GitHub repo:
@@ -37,8 +46,8 @@ iwr https://raw.githubusercontent.com/zester4/zilo-manager/main/install.ps1 | ie
 The installer runs the full first-use flow:
 
 1. Installs ZilMate globally.
-2. Runs `zilmate setup` to collect `AI_GATEWAY_API_KEY`, optional `COMPOSIO_API_KEY`, optional `TAVILY_API_KEY`, and optional Redis keys.
-3. Lets users skip Composio, Tavily, and Redis keys.
+2. Runs `zilmate setup` to collect `AI_GATEWAY_API_KEY`.
+3. Lets users skip optional Composio, Tavily, Redis, background jobs, QStash, and trigger workflows.
 4. Runs `zilmate ping` to verify the key.
 5. Starts `zilmate talk`.
 
@@ -78,7 +87,42 @@ The easiest path is:
 zilmate setup
 ```
 
-It asks for `AI_GATEWAY_API_KEY`, optionally asks for `COMPOSIO_API_KEY`, `TAVILY_API_KEY`, and Upstash Redis keys, then writes a local `.env`. Composio, Tavily, and Redis can be skipped.
+Before asking for secrets, setup shows what to have ready:
+
+- Required: AI Gateway key.
+- Optional app tools: Composio key.
+- Optional web research: Tavily key.
+- Optional cloud memory/jobs: Upstash Redis URL and token.
+- Optional hosted schedules: QStash token and public webhook URL.
+- Optional realtime voice: Deepgram key.
+
+Then it asks for `AI_GATEWAY_API_KEY` and guides users through optional features:
+
+- Composio external app tools.
+- Tavily web research.
+- Upstash Redis memory/job storage.
+- Local background jobs and schedules.
+- Upstash QStash hosted schedules.
+- Composio trigger-to-job workflows.
+- Deepgram realtime voice mode.
+
+Every optional feature can be skipped. If users only want chat, they only need the AI Gateway key.
+
+Voice can be managed without opening `.env`:
+
+```powershell
+zilmate voice setup
+zilmate voice enable
+zilmate voice disable
+zilmate voice doctor
+```
+
+Inside `zilmate talk`, use `/voice` to switch the current chat session into voice-style mode and `/voice -q` to stop it:
+
+```text
+/voice
+/voice -q
+```
 
 You can also create `.env` manually:
 
@@ -89,6 +133,20 @@ ZILMATE_USER_ID=zilmate-generated-local-user-id
 TAVILY_API_KEY=your_tavily_key
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
+ZILMATE_JOBS_ENABLED=false
+UPSTASH_QSTASH_TOKEN=
+ZILMATE_PUBLIC_JOB_WEBHOOK_URL=
+ZILMATE_JOB_WEBHOOK_SECRET=
+ZILMATE_TRIGGER_WORKFLOWS_ENABLED=false
+DEEPGRAM_API_KEY=
+ZILMATE_VOICE_ENABLED=false
+ZILMATE_VOICE_MODE=agent
+ZILMATE_VOICE_LISTEN_MODEL=flux-general-en
+ZILMATE_VOICE_LISTEN_VERSION=v2
+ZILMATE_VOICE_TTS_MODEL=aura-2-thalia-en
+ZILMATE_VOICE_LANGUAGE=en
+ZILMATE_VOICE_LANGUAGE_HINTS=
+ZILMATE_VOICE_BARGE_IN=true
 ZILO_MANAGER_MODEL=minimax/minimax-m3
 ZILO_HELP_MODEL=alibaba/qwen3.7-plus
 ZILO_POST_MODEL=alibaba/qwen3.7-plus
@@ -101,6 +159,21 @@ ZILO_IMAGE_MODEL=
 Composio is optional. If `COMPOSIO_API_KEY` is set, ZilMate creates a stable local `ZILMATE_USER_ID`, reuses Composio sessions per chat session, and lets Composio manage app auth links and connected accounts.
 
 Redis is optional. If `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set, chat turns, scratchpads, and Composio session ids use Redis. If they are missing, ZilMate falls back to local files under `.zilo-manager/`.
+
+Background jobs are optional. Setup explains the difference between local jobs and hosted schedules. Local jobs and local schedules run while `zilmate jobs worker` is running. They do not keep running after a laptop sleeps, shuts down, or loses internet. For hosted schedules that can fire while the local machine is closed, configure QStash plus a public job webhook URL.
+
+Realtime voice is optional. If `DEEPGRAM_API_KEY` and `ZILMATE_VOICE_ENABLED=true` are set, ZilMate can open Deepgram Voice Agent sessions. The default listen model is `flux-general-en` with `v2` because Flux is designed for low-latency voice agents and model-integrated end-of-turn detection. The default spoken voice is `aura-2-thalia-en`. Browser voice should use platform echo cancellation through `getUserMedia`; terminal microphone capture needs a local audio adapter.
+
+Use `zilmate voice setup` for a focused voice-only wizard. Use `zilmate voice enable` and `zilmate voice disable` to toggle voice later without editing config files.
+
+For unattended setup or installers, pass the options directly:
+
+```powershell
+zilmate setup --yes --ai-gateway-key <key> --jobs-enabled true
+zilmate setup --yes --ai-gateway-key <key> --composio-key <key> --trigger-workflows-enabled true
+zilmate setup --yes --ai-gateway-key <key> --qstash-token <token> --job-webhook-url https://example.com/api/zilmate/jobs
+zilmate setup --yes --ai-gateway-key <key> --voice-enabled true --deepgram-key <key>
+```
 
 ## Development Commands
 
@@ -117,6 +190,14 @@ npm run zilmate -- apps status
 npm run zilmate -- triggers listen
 npm run zilmate -- triggers types github
 npm run zilmate -- triggers list
+npm run zilmate -- jobs create "Research today's priority updates and summarize them"
+npm run zilmate -- jobs list
+npm run zilmate -- jobs worker --once
+npm run zilmate -- voice doctor
+npm run zilmate -- voice setup
+npm run zilmate -- voice disable
+npm run zilmate -- voice enable
+npm run zilmate -- voice turn "What should I focus on today?"
 npm run zilmate -- remember "Prefers concise support replies"
 npm run zilmate -- recall support
 npm run zilmate -- memory list
@@ -152,6 +233,8 @@ Then use ZilMate directly:
 zilmate --help
 zilmate setup
 zilmate doctor
+zilmate update
+zilmate version
 zilmate env check
 zilmate config
 zilmate talk
@@ -163,12 +246,75 @@ zilmate triggers types github
 zilmate triggers create GITHUB_BRANCH_CREATED_TRIGGER --dry-run --owner zester4 --repo zilo-manager
 zilmate triggers create GITHUB_COMMIT_EVENT --owner zester4 --repo zilo-manager
 zilmate triggers list
+zilmate jobs create "Research today's priority updates and summarize them"
+zilmate jobs create "Prepare my weekday morning briefing" --schedule "daily"
+zilmate jobs list
+zilmate jobs status job_xxx
+zilmate jobs logs job_xxx
+zilmate jobs run job_xxx
+zilmate jobs worker
+zilmate jobs cancel job_xxx
+zilmate voice doctor
+zilmate voice config
+zilmate voice setup
+zilmate voice disable
+zilmate voice enable
+zilmate voice turn "Plan my next two hours"
+zilmate voice agent-probe
 zilmate remember "Use a warm but concise support tone"
 zilmate recall support
 zilmate memory list
 zilmate help "worker cannot see shifts"
 zilmate image --model openai --size 1024x1024 "ZiloShift launch poster"
 ```
+
+## Server SDK
+
+ZilMate can also be used as a server-side SDK inside apps, dashboards, API routes, and background jobs. The SDK is server-only because it uses API keys, local/Redis memory, Tavily, Composio, and AI Gateway credentials.
+
+```ts
+import { createZilMate } from 'zilmate/server';
+
+const zilmate = createZilMate({
+  sessionId: 'support-ticket-123',
+});
+
+const result = await zilmate.chat({
+  message: 'Plan my day, then help me draft a ZiloShift worker update.',
+});
+
+console.log(result.text);
+```
+
+In Next.js, call ZilMate from an API route or server action, then connect your UI to that endpoint:
+
+```ts
+// app/api/zilmate/route.ts
+import { createZilMate } from 'zilmate/server';
+
+export async function POST(req: Request) {
+  const { message, sessionId } = await req.json();
+  const zilmate = createZilMate({ sessionId });
+  const result = await zilmate.chat({ message });
+
+  return Response.json(result);
+}
+```
+
+Available SDK methods:
+
+- `chat({ message })`: general personal assistant backed by the manager agent.
+- `manager({ message | prompt })`: explicit manager orchestration.
+- `help({ question | message })`: fast ZiloShift troubleshooting.
+- `guide({ message })`: ZiloShift workflow conversation.
+- `post({ prompt })`: WhatsApp/status/social copy.
+- `research({ query | message })`: local docs and web research.
+- `image({ prompt, provider, size, outputDir })`: image generation.
+- `remember({ text, tags })`, `recall({ query, limit })`, `listMemories()`, `forget(id)`, `clearMemories()`: durable memory helpers.
+- `createJob({ task, schedule, source, metadata })`, `listJobs({ status, limit })`, `getJob(id)`, `getJobLogs(id)`, `runJob(id)`, `runDueJobs()`, `handleJobWebhook({ jobId, secret }, expectedSecret)`, `cancelJob(id)`: background job and hosted webhook helpers.
+- `getVoiceConfig()`, `startVoiceSession({ audio, onEvent, sessionId })`: Deepgram realtime voice configuration and Agent API session helpers.
+
+For UI integrations, pass `onProgress` to render agent/tool progress and `confirm` to approve or block external write-like Composio actions.
 
 ## Command Shape
 
@@ -187,6 +333,13 @@ zilmate image --model openai --size 1024x1024 "ZiloShift launch poster"
 - `triggers info <trigger>`: show trigger config and payload schemas.
 - `triggers create <trigger> --flag value`: create a trigger instance; unknown flags become trigger config.
 - `triggers list`: list trigger instances.
+- `jobs create "<task>"`: queue a background job, optionally with `--schedule "daily"` or `--schedule "every 15 minutes"`.
+- `jobs list`: list queued/running/completed jobs.
+- `jobs status <id>`: inspect one job.
+- `jobs logs <id>`: inspect job progress, output, and errors.
+- `jobs run <id>`: run a queued job immediately.
+- `jobs worker`: run the local job processor and local scheduler.
+- `jobs cancel <id>`: cancel one job.
 - `help`: fast troubleshooting and app guidance.
 - `chat`: one-shot natural dialogue about ZiloShift workflows.
 - `post`: WhatsApp/status/social copy generation.
@@ -205,8 +358,12 @@ ZilMate uses a manager agent that delegates to focused subagents and external to
 - Post: launch messages, WhatsApp statuses, captions, and outreach copy.
 - Research: local Zilo docs first, then external docs/web research when needed.
 - Image: image generation through Gateway image models.
+- Automation Planner: background jobs, schedules, trigger workflows, QStash/webhook planning, monitoring, and follow-up automations.
+- Personal Assistant: daily planning, reminders, briefings, prioritization, follow-ups, summaries, and memory-aware organization.
+- Developer Helper: CLI/SDK usage, Next.js integration, publishing, QStash, Cloudflare tunnels, webhooks, Composio setup, and debugging.
 - Composio: external app discovery, auth links, schemas, and execution, attached only to the manager.
 - Memory: durable ZilMate facts and preferences saved locally or in Redis, available through CLI commands and manager tools.
+- Jobs: background task creation, schedule setup, status checks, logs, and cancellation available through CLI, SDK, and manager tools.
 
 Local ZiloShift docs live under `src/doc/`. ZilMate reads them on demand through dedicated tools instead of dumping all docs into every prompt. The manager prefers these local docs for ZiloShift support, worker, venue, payment, verification, SMS, and dispute questions.
 
@@ -241,7 +398,7 @@ zilmate triggers listen --trigger ti_abc123
 zilmate triggers listen --trigger-slug GMAIL_NEW_EMAIL_EVENT --once
 ```
 
-This is terminal-local. For persistent public callbacks, use webhook/tunnel support later.
+This is terminal-local. When `ZILMATE_TRIGGER_WORKFLOWS_ENABLED=true`, trigger events handled by `zilmate triggers listen` also create background jobs. ZilMate includes generic workflow prompts for Gmail, GitHub, Slack, and calendar-style events, and falls back to a general external-app summary task for other toolkits.
 
 The manager agent also has trigger tools. In `zilmate talk`, you can ask:
 
@@ -252,6 +409,37 @@ create that trigger
 ```
 
 ZilMate should discover current trigger slugs first, inspect the trigger schema, prefer a dry-run payload, and ask for confirmation before creating a real trigger.
+
+## Background Jobs And Schedules
+
+Use jobs when ZilMate should keep working after a chat turn ends:
+
+```powershell
+zilmate jobs create "Research AI assistant scheduling patterns and save a summary"
+zilmate jobs create "Prepare my morning briefing" --schedule daily
+zilmate jobs worker
+```
+
+Local job storage uses `.zilo-manager/jobs.json` and `.zilo-manager/job-logs.json` unless Redis is configured. With Redis, jobs and logs use the same Upstash REST connection as memory.
+
+Schedules supported locally include `hourly`, `daily`, `every 15 minutes`, `every 2 hours`, `every 1 day`, and ISO date/time strings. QStash schedules can use `cron:<expression>` when `UPSTASH_QSTASH_TOKEN` and `ZILMATE_PUBLIC_JOB_WEBHOOK_URL` are configured.
+
+Hosted apps can expose a webhook route and call:
+
+```ts
+import { createZilMate } from 'zilmate/server';
+
+export async function POST(req: Request) {
+  const body = await req.json();
+  const zilmate = createZilMate();
+  const result = await zilmate.handleJobWebhook(
+    { jobId: body.jobId, secret: req.headers.get('ZilMate-Webhook-Secret') ?? undefined },
+    process.env.ZILMATE_JOB_WEBHOOK_SECRET,
+  );
+
+  return Response.json(result);
+}
+```
 
 ## Model Notes
 

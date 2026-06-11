@@ -2,7 +2,7 @@ import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { constants, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { env, hasComposio, hasGatewayAuth, hasRedis } from '../config/env.js';
+import { env, hasComposio, hasDeepgram, hasGatewayAuth, hasQStash, hasRedis } from '../config/env.js';
 import { getModelAvailability, models } from '../config/models.js';
 import { getComposioStatus } from '../tools/composio.tool.js';
 import { memoryBackendName } from '../memory/redis.js';
@@ -52,6 +52,12 @@ export function getConfigSummary() {
       tavily: Boolean(env.tavilyApiKey),
       redisUrl: Boolean(env.upstashRedisRestUrl),
       redisToken: Boolean(env.upstashRedisRestToken),
+      jobs: env.zilmateJobsEnabled,
+      qstash: Boolean(env.upstashQstashToken),
+      jobWebhookUrl: Boolean(env.zilmatePublicJobWebhookUrl),
+      triggerWorkflows: env.zilmateTriggerWorkflowsEnabled,
+      voice: env.zilmateVoiceEnabled,
+      deepgram: Boolean(env.deepgramApiKey),
     },
     memory: {
       backend: memoryBackendName(),
@@ -114,6 +120,34 @@ export async function runDoctor(options: { live?: boolean; sessionId?: string } 
       : env.upstashRedisRestUrl || env.upstashRedisRestToken
         ? 'Redis is partially configured; set both URL and token'
         : 'Redis not configured; using local file memory',
+  });
+  checks.push({
+    name: 'Jobs',
+    status: env.zilmateJobsEnabled ? 'pass' : 'warn',
+    detail: env.zilmateJobsEnabled ? 'Background jobs are enabled' : 'Background jobs are disabled; set ZILMATE_JOBS_ENABLED=true',
+  });
+  checks.push({
+    name: 'QStash',
+    status: hasQStash() ? 'pass' : env.upstashQstashToken || env.zilmatePublicJobWebhookUrl ? 'fail' : 'warn',
+    detail: hasQStash()
+      ? 'QStash hosted scheduling is configured'
+      : env.upstashQstashToken || env.zilmatePublicJobWebhookUrl
+        ? 'QStash is partially configured; set token and public webhook URL'
+        : 'QStash not configured; using local worker scheduling only',
+  });
+  checks.push({
+    name: 'Trigger workflows',
+    status: env.zilmateTriggerWorkflowsEnabled ? 'pass' : 'warn',
+    detail: env.zilmateTriggerWorkflowsEnabled ? 'Composio trigger events will queue jobs' : 'Composio trigger workflows are disabled',
+  });
+  checks.push({
+    name: 'Voice',
+    status: env.zilmateVoiceEnabled && hasDeepgram() ? 'pass' : env.zilmateVoiceEnabled ? 'fail' : 'warn',
+    detail: env.zilmateVoiceEnabled
+      ? hasDeepgram()
+        ? `Deepgram voice configured: ${env.zilmateVoiceListenModel} -> ${env.zilmateVoiceTtsModel}`
+        : 'Voice is enabled but DEEPGRAM_API_KEY is missing'
+      : 'Realtime voice is disabled',
   });
 
   try {

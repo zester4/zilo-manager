@@ -1,5 +1,6 @@
 import { Composio, type IncomingTriggerPayload, type TriggerSubscribeParams } from '@composio/core';
 import { env, requireComposio } from '../config/env.js';
+import { createJobFromComposioTrigger, triggerWorkflowsEnabled } from '../jobs/workflows.js';
 
 type TriggerListOptions = {
   limit?: string;
@@ -138,6 +139,12 @@ function printTriggerEvent(event: IncomingTriggerPayload, asJson: boolean) {
   console.log(`  toolkit=${event.toolkitSlug} trigger=${event.id} user=${event.userId || 'unknown'}`);
 }
 
+async function handleTriggerWorkflow(event: IncomingTriggerPayload) {
+  if (!triggerWorkflowsEnabled()) return;
+  const job = await createJobFromComposioTrigger(event);
+  if (job) console.log(`  queuedJob=${job.id}`);
+}
+
 export async function listTriggerTypes(toolkit: string | undefined, options: TriggerTypeOptions) {
   const client = getComposioTriggerClient();
   const response = await client.triggers.listTypes({
@@ -258,6 +265,9 @@ export async function listenToTriggers(options: TriggerListenOptions) {
 
   await client.triggers.subscribe((event) => {
     printTriggerEvent(event, Boolean(options.json));
+    void handleTriggerWorkflow(event).catch((error) => {
+      console.error(`  workflowError=${error instanceof Error ? error.message : String(error)}`);
+    });
     if (options.once) void stop();
   }, filters);
 

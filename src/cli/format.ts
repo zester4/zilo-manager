@@ -5,6 +5,14 @@ import type { ProgressEvent } from '../runtime/progress.js';
 
 const maxWidth = () => Math.min(process.stdout.columns || 96, 110);
 const divider = (color = chalk.gray) => color('─'.repeat(Math.min(maxWidth(), 88)));
+const zilmateBanner = String.raw`
+███████╗██╗██╗     ███╗   ███╗ █████╗ ████████╗███████╗
+╚══███╔╝██║██║     ████╗ ████║██╔══██╗╚══██╔══╝██╔════╝
+  ███╔╝ ██║██║     ██╔████╔██║███████║   ██║   █████╗
+ ███╔╝  ██║██║     ██║╚██╔╝██║██╔══██║   ██║   ██╔══╝
+███████╗██║███████╗██║ ╚═╝ ██║██║  ██║   ██║   ███████╗
+╚══════╝╚═╝╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝
+`;
 
 function stripInline(markdown: string) {
   return markdown
@@ -120,6 +128,99 @@ export function printMarkdown(markdown: string) {
 
 export function printJson(value: unknown) {
   console.log(chalk.gray(JSON.stringify(value, null, 2)));
+}
+
+export function clip(value: unknown, width: number) {
+  const text = value === undefined || value === null ? '' : String(value).replace(/\s+/g, ' ').trim();
+  if (text.length <= width) return text.padEnd(width);
+  return `${text.slice(0, Math.max(0, width - 1))}…`;
+}
+
+function plain(value: unknown) {
+  return value === undefined || value === null ? '' : String(value).replace(/\s+/g, ' ').trim();
+}
+
+export function printPanel(title: string, rows: Array<[string, string]>) {
+  const width = Math.min(maxWidth(), 88);
+  console.log(chalk.cyan(`╭${'─'.repeat(width - 2)}╮`));
+  console.log(chalk.cyan('│') + chalk.bold.cyanBright(` ${clip(title, width - 4)} `) + chalk.cyan('│'));
+  console.log(chalk.cyan(`├${'─'.repeat(width - 2)}┤`));
+  for (const [label, value] of rows) {
+    const line = `${label.padEnd(20)} ${value}`;
+    console.log(chalk.cyan('│') + ` ${clip(line, width - 4)} ` + chalk.cyan('│'));
+  }
+  console.log(chalk.cyan(`╰${'─'.repeat(width - 2)}╯`));
+}
+
+function colorCell(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  if (['pass', 'ready', 'enabled', 'yes', 'succeeded', 'running', 'configured'].includes(trimmed)) return chalk.green(value);
+  if (['queued', 'warn', 'warning', 'local fallback', 'local schedules only'].includes(trimmed)) return chalk.yellow(value);
+  if (['fail', 'failed', 'error', 'missing', 'no'].includes(trimmed)) return chalk.red(value);
+  if (['off', 'disabled', 'skipped', 'none', '-'].includes(trimmed)) return chalk.gray(value);
+  if (/^job_[a-f0-9-]+/i.test(trimmed)) return chalk.cyan(value);
+  return value;
+}
+
+function tableWidths(headers: string[], rows: string[][]) {
+  const available = Math.max(40, maxWidth() - headers.length * 3 - 1);
+  const minimums = headers.map((header) => Math.min(Math.max(header.length, 6), 12));
+  const natural = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => plain(row[index]).length)));
+  let widths = natural.map((width, index) => Math.max(minimums[index]!, Math.min(width, index === headers.length - 1 ? 52 : 22)));
+  let total = widths.reduce((sum, width) => sum + width, 0);
+
+  while (total > available) {
+    const index = widths
+      .map((width, itemIndex) => ({ width, itemIndex, min: minimums[itemIndex]! }))
+      .filter((item) => item.width > item.min)
+      .sort((a, b) => b.width - a.width)[0]?.itemIndex;
+    if (index === undefined) break;
+    widths[index] = widths[index]! - 1;
+    total -= 1;
+  }
+
+  return widths;
+}
+
+export function printTable(headers: string[], rows: string[][]) {
+  if (rows.length === 0) {
+    printPanel('Table', [['Status', 'No rows']]);
+    return;
+  }
+
+  const widths = tableWidths(headers, rows);
+  const top = `╭${widths.map((width) => '─'.repeat(width + 2)).join('┬')}╮`;
+  const middle = `├${widths.map((width) => '─'.repeat(width + 2)).join('┼')}┤`;
+  const bottom = `╰${widths.map((width) => '─'.repeat(width + 2)).join('┴')}╯`;
+  const renderRow = (row: string[], header = false) => (
+    `│${row.map((cell, index) => {
+      const value = clip(cell, widths[index]!);
+      return ` ${header ? chalk.bold.cyanBright(value) : colorCell(value)} `;
+    }).join('│')}│`
+  );
+
+  console.log(chalk.cyan(top));
+  console.log(renderRow(headers, true));
+  console.log(chalk.cyan(middle));
+  rows.forEach((row, index) => {
+    console.log(renderRow(row));
+    if (index < rows.length - 1) console.log(chalk.gray(`├${widths.map((width) => '─'.repeat(width + 2)).join('┼')}┤`));
+  });
+  console.log(chalk.cyan(bottom));
+}
+
+export function statusText(value: boolean, label = 'on') {
+  return value ? chalk.green(label) : chalk.gray('off');
+}
+
+export function printZilMateBanner(subtitle?: string) {
+  const width = Math.min(maxWidth(), 64);
+  const line = '═'.repeat(width);
+  console.log(chalk.cyanBright(line));
+  console.log(chalk.cyanBright(zilmateBanner));
+  if (subtitle) console.log(chalk.whiteBright(`  ${subtitle}`));
+  console.log(chalk.gray('  CLI assistant · subagents · memory · jobs · tools'));
+  console.log(chalk.cyanBright(line));
 }
 
 export function printTitle(title: string, subtitle?: string) {

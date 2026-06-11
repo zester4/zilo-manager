@@ -1,0 +1,24 @@
+{
+  "name": "zilmate",
+  "version": "0.1.0",
+  "description": "A deep ZilMate assistant skill for building, integrating, and explaining the ZilMate CLI and SDK.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ZilMate",
+    "shortDescription": "Build and integrate ZilMate as a personal AI assistant.",
+    "longDescription": "ZilMate helps users plan, write, research, automate, remember context, generate assets, and bring an assistant experience into apps through a CLI and server-side SDK.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [
+      "assistant-workflows",
+      "cli-guidance",
+      "sdk-integration",
+      "nextjs-integration",
+      "product-positioning"
+    ],
+    "defaultPrompt": "Help me build with ZilMate."
+  }
+}

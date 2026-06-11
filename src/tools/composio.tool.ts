@@ -244,10 +244,15 @@ export async function createComposioTools(chatSessionId = 'default') {
   if (!hasComposio()) return {};
 
   emitProgress({ type: 'tool:start', label: 'Loading Composio tools', detail: chatSessionId });
-  const { session, reused } = await getOrCreateSession(chatSessionId);
-  const tools = await session.tools(executionGuard());
-  emitProgress({ type: 'tool:end', label: reused ? 'Composio session reused' : 'Composio session created', detail: session.sessionId });
-  return tools;
+  try {
+    const { session, reused } = await getOrCreateSession(chatSessionId);
+    const tools = await session.tools(executionGuard());
+    emitProgress({ type: 'tool:end', label: reused ? 'Composio session reused' : 'Composio session created', detail: session.sessionId });
+    return tools;
+  } catch (error) {
+    emitProgress({ type: 'tool:error', label: 'Composio tools unavailable', detail: error instanceof Error ? error.message : String(error) });
+    return {};
+  }
 }
 
 export async function getComposioStatus(chatSessionId = 'default') {
@@ -262,7 +267,16 @@ export async function getComposioStatus(chatSessionId = 'default') {
 
   if (!configured) return status;
 
-  const { session, reused } = await getOrCreateSession(chatSessionId);
+  let session: Awaited<ReturnType<typeof getOrCreateSession>>['session'];
+  let reused = false;
+  try {
+    const result = await getOrCreateSession(chatSessionId);
+    session = result.session;
+    reused = result.reused;
+  } catch (error) {
+    emitProgress({ type: 'tool:error', label: 'Composio session unavailable', detail: error instanceof Error ? error.message : String(error) });
+    return status;
+  }
   status.sessionId = session.sessionId;
   status.reusedSession = reused;
 

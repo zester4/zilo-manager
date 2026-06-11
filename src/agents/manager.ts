@@ -7,6 +7,9 @@ import { createChatAgent } from './chat.agent.js';
 import { createPostAgent } from './post.agent.js';
 import { createImageAgent } from './image.agent.js';
 import { createDocsResearchAgent } from './docs-research.agent.js';
+import { createAutomationPlannerAgent } from './automation-planner.agent.js';
+import { createPersonalAssistantAgent } from './personal-assistant.agent.js';
+import { createDeveloperHelperAgent } from './developer-helper.agent.js';
 import { checkReadOnlyIntent } from '../safety/approvals.js';
 import { limits } from '../safety/limits.js';
 import { emitProgress, type ProgressEvent, withProgressListener } from '../runtime/progress.js';
@@ -16,6 +19,9 @@ import { ziloDocsTools } from '../tools/zilo-docs.tool.js';
 import { createComposioTools } from '../tools/composio.tool.js';
 import { memoryTools } from '../tools/memory.tool.js';
 import { triggerTools } from '../tools/triggers.tool.js';
+import { jobTools } from '../tools/jobs.tool.js';
+import { timeTools } from '../tools/time.tool.js';
+import { fileSystemTools } from '../tools/filesystem.tool.js';
 
 function agentInput(prompt: string, abortSignal?: AbortSignal) {
   return abortSignal ? { prompt, abortSignal } : { prompt };
@@ -28,6 +34,9 @@ function describeTool(name: string) {
     post: 'Using post-writing subagent',
     image: 'Using image generation subagent',
     research: 'Using research subagent',
+    automationPlanner: 'Using automation planner subagent',
+    personalAssistant: 'Using personal assistant subagent',
+    developerHelper: 'Using developer helper subagent',
     readScratchpad: 'Reading scratchpad',
     appendScratchpad: 'Updating scratchpad',
     rememberMemory: 'Saving memory',
@@ -41,6 +50,20 @@ function describeTool(name: string) {
     showTriggerType: 'Loading trigger schema',
     listTriggers: 'Listing triggers',
     createTrigger: 'Creating trigger',
+    createJob: 'Creating job',
+    listJobs: 'Listing jobs',
+    showJob: 'Loading job',
+    listJobLogs: 'Loading job logs',
+    cancelJob: 'Cancelling job',
+    getCurrentTime: 'Checking time',
+    searchFiles: 'Searching files',
+    readFile: 'Reading file',
+    writeFile: 'Writing file',
+    createFolder: 'Creating folder',
+    moveCopyRename: 'Moving/copying/renaming file',
+    summarizeDocument: 'Summarizing document',
+    watchFolderChanges: 'Checking folder changes',
+    findDuplicateLargeFiles: 'Finding duplicate/large files',
     COMPOSIO_SEARCH_TOOLS: 'Searching Composio tools',
     COMPOSIO_GET_TOOL_SCHEMAS: 'Loading Composio tool schemas',
     COMPOSIO_MANAGE_CONNECTIONS: 'Managing Composio connection',
@@ -76,6 +99,9 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
   const post = createPostAgent();
   const image = createImageAgent();
   const research = createDocsResearchAgent(runId);
+  const automationPlanner = createAutomationPlannerAgent();
+  const personalAssistant = createPersonalAssistantAgent();
+  const developerHelper = createDeveloperHelperAgent(runId);
   const scratchpadTools = createScratchpadTools(runId);
   const composioTools = await createComposioTools(options.sessionId || 'default');
 
@@ -88,8 +114,16 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
       'For Composio, prefer this flow: use COMPOSIO_SEARCH_TOOLS to find relevant external app tools, COMPOSIO_GET_TOOL_SCHEMAS to inspect required arguments, COMPOSIO_MANAGE_CONNECTIONS to create or show app connection links, and COMPOSIO_MULTI_EXECUTE_TOOL to execute selected tools after arguments are clear.',
       'When COMPOSIO_MANAGE_CONNECTIONS returns an authorization or connect URL, print that URL plainly and tell the user to open it to connect their account before retrying the app action.',
       'For app events, use trigger tools: listTriggerTypes to discover current trigger slugs, showTriggerType to inspect required config, listTriggers to inspect existing trigger instances, and createTrigger only after config is clear. Prefer dryRun first, then ask for confirmation before creating a real trigger.',
+      'Use job tools when the user wants ZilMate to keep working after chat, schedule a task, create a report later, monitor something, follow up, inspect job status, read job logs, or cancel background work.',
+      'Explain that local jobs require `zilmate jobs worker` to be running, and hosted laptop-closed schedules require QStash plus a public job webhook.',
+      'Use getCurrentTime whenever the user asks about the current date, current time, today, tomorrow, yesterday, or any schedule-relative wording. Do not guess dates or times.',
+      'Use file-system tools for local file search, reading, writing, folder creation, moving/copying/renaming, document summaries, folder change checks, and duplicate/large file audits. File writes and file operations require confirmation. Do not request or expose secrets from .env, keys, credentials, or token files.',
       'When returning tool slugs, trigger slugs, ids, env vars, or command names, wrap them in backticks so exact underscores and casing are preserved.',
-      'Use research for current web or documentation questions. Use specialized subagents for focused chat, quick help, post copy, image assets, and research.',
+      'Use specialized subagents for focused chat, quick help, post copy, image assets, research, automation planning, personal-assistant planning, and developer integration help.',
+      'Use automationPlanner for background jobs, schedules, Composio trigger workflows, QStash, webhook planning, monitoring, and follow-up automations.',
+      'Use personalAssistant for daily planning, reminders, briefings, prioritization, follow-ups, summaries, and memory-aware personal organization.',
+      'Use developerHelper for SDK usage, Next.js routes, install issues, package publishing, Cloudflare tunnels, webhooks, QStash, Composio setup, and technical troubleshooting.',
+      'Use research for current web or documentation questions that need sources.',
       'Use long-term memory tools for stable preferences, durable project facts, and recurring context. Do not save secrets, API keys, tokens, passwords, or sensitive personal data to memory.',
       'Keep parent context small and use scratchpad tools for compact notes during multi-source or multi-step tasks.',
       'Do not build OAuth flows yourself. Do not claim live external changes happened unless the tool result confirms them.',
@@ -115,8 +149,23 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
         const result = await research.generate(agentInput(prompt, abortSignal));
         return result.text;
       }),
+      automationPlanner: subagentTool('automationPlanner', 'Plan background jobs, schedules, trigger workflows, monitoring, follow-ups, QStash, and webhook automations.', async (prompt, abortSignal) => {
+        const result = await automationPlanner.generate(agentInput(prompt, abortSignal));
+        return result.text;
+      }),
+      personalAssistant: subagentTool('personalAssistant', 'Daily planning, reminders, briefings, prioritization, follow-ups, summaries, and memory-aware assistant work.', async (prompt, abortSignal) => {
+        const result = await personalAssistant.generate(agentInput(prompt, abortSignal));
+        return result.text;
+      }),
+      developerHelper: subagentTool('developerHelper', 'Developer-focused help for ZilMate CLI, SDK, Next.js integration, publishing, QStash, Cloudflare tunnels, webhooks, and debugging.', async (prompt, abortSignal) => {
+        const result = await developerHelper.generate(agentInput(prompt, abortSignal));
+        return result.text;
+      }),
       ...ziloDocsTools,
       ...memoryTools,
+      ...timeTools,
+      ...fileSystemTools,
+      ...jobTools,
       ...triggerTools,
       ...scratchpadTools,
       ...composioTools,
