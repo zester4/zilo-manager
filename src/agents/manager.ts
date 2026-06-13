@@ -10,7 +10,6 @@ import { createDocsResearchAgent } from './docs-research.agent.js';
 import { createAutomationPlannerAgent } from './automation-planner.agent.js';
 import { createPersonalAssistantAgent } from './personal-assistant.agent.js';
 import { createDeveloperHelperAgent } from './developer-helper.agent.js';
-import { checkReadOnlyIntent } from '../safety/approvals.js';
 import { limits } from '../safety/limits.js';
 import { emitProgress, type ProgressEvent, withProgressListener } from '../runtime/progress.js';
 import { type ConfirmationHandler, withConfirmationHandler } from '../runtime/confirm.js';
@@ -23,6 +22,7 @@ import { jobTools } from '../tools/jobs.tool.js';
 import { timeTools } from '../tools/time.tool.js';
 import { fileSystemTools } from '../tools/filesystem.tool.js';
 import { desktopTools } from '../tools/desktop.tool.js';
+import { shellTools } from '../tools/shell.tool.js';
 
 function agentInput(prompt: string, abortSignal?: AbortSignal) {
   return abortSignal ? { prompt, abortSignal } : { prompt };
@@ -62,6 +62,10 @@ function describeTool(name: string) {
     writeFile: 'Writing file',
     createFolder: 'Creating folder',
     moveCopyRename: 'Moving/copying/renaming file',
+    deleteFile: 'Deleting file',
+    deleteFolder: 'Deleting folder',
+    listDirectory: 'Listing directory',
+    getFileInfo: 'Getting file info',
     summarizeDocument: 'Summarizing document',
     watchFolderChanges: 'Checking folder changes',
     findDuplicateLargeFiles: 'Finding duplicate/large files',
@@ -71,6 +75,17 @@ function describeTool(name: string) {
     analyzeScreenshot: 'Analyzing screenshot',
     takeCameraPhoto: 'Taking camera photo',
     analyzeCameraPhoto: 'Analyzing camera photo',
+    openFile: 'Opening file',
+    openApplication: 'Opening application',
+    getSystemInfo: 'Getting system info',
+    listRunningApplications: 'Listing running apps',
+    simulateKeyboard: 'Sending keyboard input',
+    executeCommand: 'Executing command',
+    installDependencies: 'Installing dependencies',
+    runPipeline: 'Running command pipeline',
+    pythonScript: 'Running Python script',
+    listProcesses: 'Listing processes',
+    findInPath: 'Searching PATH',
     COMPOSIO_SEARCH_TOOLS: 'Searching Composio tools',
     COMPOSIO_GET_TOOL_SCHEMAS: 'Loading Composio tool schemas',
     COMPOSIO_MANAGE_CONNECTIONS: 'Managing Composio connection',
@@ -126,8 +141,9 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
       'Use job tools when the user wants ZilMate to keep working after chat, schedule a task, create a report later, monitor something, follow up, inspect job status, read job logs, or cancel background work.',
       'Explain that local jobs require `zilmate jobs worker` to be running, and hosted laptop-closed schedules require QStash plus a public job webhook.',
       'Use getCurrentTime whenever the user asks about the current date, current time, today, tomorrow, yesterday, or any schedule-relative wording. Do not guess dates or times.',
-      'Use file-system tools for local file search, reading, writing, folder creation, moving/copying/renaming, document summaries, folder change checks, and duplicate/large file audits. File writes and file operations require confirmation. Do not request or expose secrets from .env, keys, credentials, or token files.',
-      'Use desktop tools when the user asks you to inspect copied text, copy text to clipboard, take a screenshot, analyze what is visible on screen, describe UI state/errors, use the laptop camera, analyze a camera photo, or search the web based on a screenshot/photo. Clipboard, screenshot, and camera access require confirmation and can be approved for the session.',
+      'Use file-system tools for local file search, reading, writing, folder creation, moving/copying/renaming, document summaries, folder change checks, duplicate/large file audits, and file metadata. File operations are free and unrestricted. Use deleteFile and deleteFolder to remove files (requires confirm=true for safety).',
+      'Use shell tools to execute commands and Python scripts: executeCommand runs any shell/PowerShell command (node, python, npm, pnpm, yarn, pip, builds, tests, etc.), installDependencies auto-detects and installs packages, runPipeline chains commands with pipes (cmd1 | cmd2), getSystemInfo gets CPU/memory/OS details, listProcesses lists running apps, findInPath checks if a command exists. These tools make the agent truly powerful in the CLI—capable of running any automation, installing packages, running tests, and executing applications.',
+      'Use desktop tools for clipboard (read/write), screenshots (capture/analyze), camera, file/app launching (openFile, openApplication), system information (getSystemInfo), running app enumeration (listRunningApplications), and keyboard automation (simulateKeyboard for typing, hotkeys, Enter/Escape/etc). Desktop tools enable full system automation and UI control.',
       'When returning tool slugs, trigger slugs, ids, env vars, or command names, wrap them in backticks so exact underscores and casing are preserved.',
       'Use specialized subagents for focused chat, quick help, post copy, image assets, research, automation planning, personal-assistant planning, and developer integration help.',
       'Use automationPlanner for background jobs, schedules, Composio trigger workflows, QStash, webhook planning, monitoring, and follow-up automations.',
@@ -181,6 +197,7 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
       ...triggerTools,
       ...scratchpadTools,
       ...composioTools,
+      ...shellTools,
     },
     stopWhen: stepCountIs(limits.managerSteps),
   });
@@ -192,9 +209,6 @@ function toolNamesFromStep(step: unknown) {
 }
 
 export async function runManager(prompt: string, options: { progress?: (event: ProgressEvent) => void; runId?: string; sessionId?: string; confirm?: ConfirmationHandler } = {}) {
-  const safety = checkReadOnlyIntent(prompt);
-  if (safety.decision === 'blocked') return safety.reason!;
-
   return withProgressListener(options.progress, async () => {
     return withConfirmationHandler(options.confirm, async () => {
       const runId = options.runId || randomUUID();

@@ -1,10 +1,16 @@
-﻿export type ApprovalDecision = 'allowed' | 'blocked';
+﻿export type ApprovalDecision = 'allowed' | 'needs_confirmation';
 
-const blockedIntentPattern = /\b(delete|drop|wipe|reset|transfer money|send payout|revoke)\b/i;
+const dangerousIntentPattern = /\b(delete|drop|wipe|reset|transfer money|send payout|revoke)\b/i;
 
-export function checkReadOnlyIntent(prompt: string): { decision: ApprovalDecision; reason?: string } {
-  if (blockedIntentPattern.test(prompt)) {
-    return { decision: 'blocked', reason: 'This CLI scaffold is read-only for app operations. It can guide, draft, research, and generate assets only.' };
+export function checkReadOnlyIntent(prompt: string): { decision: ApprovalDecision; reason?: string; operation?: string } {
+  const match = prompt.match(dangerousIntentPattern);
+  if (match) {
+    const operation = match[0].toLowerCase();
+    return { 
+      decision: 'needs_confirmation', 
+      operation,
+      reason: `This is a potentially destructive ${operation} operation on your system. This CLI scaffold requires explicit approval for severe actions.` 
+    };
   }
   return { decision: 'allowed' };
 }

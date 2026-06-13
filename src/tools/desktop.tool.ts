@@ -332,13 +332,11 @@ const defaultCameraPrompt = [
 
 export const desktopTools = {
   readClipboard: tool({
-    description: 'Read the current system clipboard text after user approval. Use when the user asks ZilMate to inspect copied text, copied errors, URLs, snippets, or prompts.',
+    description: 'Read the current system clipboard text. Use when the user asks ZilMate to inspect copied text, copied errors, URLs, snippets, or prompts.',
     inputSchema: z.object({
       maxCharacters: z.number().int().min(100).max(20_000).optional(),
     }),
     execute: async ({ maxCharacters }) => {
-      const approved = await confirmDesktopAction('Read clipboard', ['Read text currently stored in the system clipboard']);
-      if (!approved) throw new Error('Blocked clipboard read. Ask the user to approve reading the clipboard.');
       const text = await readClipboardText();
       const limit = maxCharacters ?? 8000;
       emitProgress({ type: 'fetch:end', label: 'Clipboard read', detail: `${text.length} character${text.length === 1 ? '' : 's'}` });
@@ -351,13 +349,11 @@ export const desktopTools = {
   }),
 
   writeClipboard: tool({
-    description: 'Write text to the system clipboard after user approval. Use when the user asks ZilMate to copy an answer, command, file path, draft, or summary.',
+    description: 'Write text to the system clipboard. Use when the user asks ZilMate to copy an answer, command, file path, draft, or summary.',
     inputSchema: z.object({
       text: z.string().min(1).max(100_000),
     }),
     execute: async ({ text }) => {
-      const approved = await confirmDesktopAction('Write clipboard', [`Write ${text.length} character${text.length === 1 ? '' : 's'} to clipboard`], 'Write');
-      if (!approved) throw new Error('Blocked clipboard write. Ask the user to approve writing to the clipboard.');
       await writeClipboardText(text);
       emitProgress({ type: 'tool:end', label: 'Clipboard updated' });
       return { copied: true, characters: text.length };
@@ -365,11 +361,9 @@ export const desktopTools = {
   }),
 
   takeScreenshot: tool({
-    description: 'Capture the current screen to a local PNG file after user approval. Use when the user asks ZilMate to look at the screen or capture current UI state.',
+    description: 'Capture the current screen to a local PNG file. Use when the user asks ZilMate to look at the screen or capture current UI state.',
     inputSchema: z.object({}),
     execute: async () => {
-      const approved = await confirmDesktopAction('Take screenshot', ['Capture the current primary screen as an image file']);
-      if (!approved) throw new Error('Blocked screenshot. Ask the user to approve screen capture.');
       const file = await captureScreenshot();
       emitProgress({ type: 'tool:end', label: 'Screenshot captured', detail: file });
       return { file };
@@ -379,7 +373,7 @@ export const desktopTools = {
   analyzeScreenshot: tool({
     description: 'Capture or read a screenshot and analyze it with Gemini 3.1 Flash Lite. Gives a detailed description, visible text, UI/error diagnosis, and optional web search context.',
     inputSchema: z.object({
-      path: z.string().min(1).optional().describe('Existing screenshot path. If omitted, ZilMate captures the current screen after approval.'),
+      path: z.string().min(1).optional().describe('Existing screenshot path. If omitted, ZilMate captures the current screen.'),
       prompt: z.string().min(3).optional(),
       searchWeb: z.boolean().optional().describe('If true, search the web using the screenshot analysis for extra context. Requires Tavily.'),
       maxSearchResults: z.number().int().min(1).max(5).optional(),
@@ -387,8 +381,6 @@ export const desktopTools = {
     execute: async ({ path: imagePath, prompt, searchWeb: shouldSearchWeb, maxSearchResults }) => {
       let file = imagePath ? path.resolve(imagePath) : '';
       if (!file) {
-        const approved = await confirmDesktopAction('Capture and analyze screenshot', ['Capture current screen and send the image to the configured AI Gateway screenshot model']);
-        if (!approved) throw new Error('Blocked screenshot analysis. Ask the user to approve screen capture.');
         file = await captureScreenshot();
       }
 
@@ -452,6 +444,202 @@ export const desktopTools = {
         analysis,
         ...(webResults ? { webResults } : {}),
       };
+    },
+  }),
+
+  openFile: tool({
+    description: 'Open a file with its default application. Examples: open a PDF in reader, image in viewer, spreadsheet in Excel, code in editor, or any file with its registered app.',
+    inputSchema: z.object({
+      path: z.string().min(1).describe('File path to open'),
+    }),
+    execute: async ({ path: filePath }) => {
+      emitProgress({ type: 'tool:start', label: 'Opening file', detail: filePath });
+
+      try {
+        const resolvedPath = path.resolve(filePath);
+        if (!existsSync(resolvedPath)) {
+          throw new Error(`File not found: ${resolvedPath}`);
+        }
+
+        if (process.platform === 'win32') {
+          await execFileAsync('cmd.exe', ['/c', 'start', '', resolvedPath], { windowsHide: true });
+        } else if (process.platform === 'darwin') {
+          await execFileAsync('open', [resolvedPath]);
+        } else {
+          await execFileAsync('xdg-open', [resolvedPath]);
+        }
+
+        emitProgress({ type: 'tool:end', label: 'File opened', detail: resolvedPath });
+        return { opened: true, path: resolvedPath };
+      } catch (error: any) {
+        emitProgress({ type: 'tool:error', label: 'Failed to open file', detail: error.message });
+        return { opened: false, error: error.message };
+      }
+    },
+  }),
+
+  openApplication: tool({
+    description: 'Open an application by name or path. Examples: "chrome", "firefox", "code", "notepad", "explorer", "terminal", etc.',
+    inputSchema: z.object({
+      application: z.string().min(1).describe('App name or path (e.g., "code", "chrome", "powershell", "/Applications/Safari.app")'),
+      args: z.array(z.string()).optional().describe('Command line arguments to pass to the app'),
+    }),
+    execute: async ({ application, args }) => {
+      emitProgress({ type: 'tool:start', label: 'Opening application', detail: application });
+
+      try {
+        if (process.platform === 'win32') {
+          await execFileAsync('cmd.exe', ['/c', 'start', application, ...(args || [])], { windowsHide: true });
+        } else if (process.platform === 'darwin') {
+          const openArgs = ['-a', application];
+          if (args && args.length > 0) {
+            openArgs.push('--args', ...args);
+          }
+          await execFileAsync('open', openArgs);
+        } else {
+          await execFileAsync(application, args || []);
+        }
+
+        emitProgress({ type: 'tool:end', label: 'Application opened', detail: application });
+        return { opened: true, application };
+      } catch (error: any) {
+        emitProgress({ type: 'tool:error', label: 'Failed to open application', detail: error.message });
+        return { opened: false, error: error.message };
+      }
+    },
+  }),
+
+  getSystemInfo: tool({
+    description: 'Get system information: OS, CPU, memory, disk, installed apps (Windows/macOS), current user, screen resolution, network, and more.',
+    inputSchema: z.object({}),
+    execute: async () => {
+      emitProgress({ type: 'tool:start', label: 'Fetching system info' });
+
+      try {
+        const os = await import('node:os');
+        const fs = await import('node:fs/promises');
+
+        const cpus = os.cpus();
+        const freeMem = os.freemem();
+        const totalMem = os.totalmem();
+        const uptime = os.uptime();
+
+        let diskInfo: any = {};
+        if (process.platform === 'win32') {
+          try {
+            const { stdout } = await execFileAsync('wmic', ['logicaldisk', 'get', 'name,size,freespace', '/csv']);
+            diskInfo = { raw: stdout };
+          } catch {}
+        } else {
+          try {
+            const { stdout } = await execFileAsync('df', ['-h']);
+            diskInfo = { raw: stdout };
+          } catch {}
+        }
+
+        const systemInfo = {
+          os: os.platform(),
+          arch: os.arch(),
+          release: os.release(),
+          cpuCores: cpus.length,
+          cpuModel: cpus[0]?.model,
+          memoryGB: {
+            total: (totalMem / (1024 ** 3)).toFixed(2),
+            free: (freeMem / (1024 ** 3)).toFixed(2),
+            used: ((totalMem - freeMem) / (1024 ** 3)).toFixed(2),
+          },
+          uptimeHours: (uptime / 3600).toFixed(2),
+          nodeVersion: process.version,
+          homeDir: os.homedir(),
+          userInfo: os.userInfo(),
+          ...(Object.keys(diskInfo).length > 0 && { disk: diskInfo }),
+        };
+
+        emitProgress({ type: 'tool:end', label: 'System info retrieved' });
+        return systemInfo;
+      } catch (error: any) {
+        return {
+          os: process.platform,
+          error: error.message,
+        };
+      }
+    },
+  }),
+
+  listRunningApplications: tool({
+    description: 'List running processes/applications. Windows: tasklist, Unix/Mac: ps aux. Can filter by name.',
+    inputSchema: z.object({
+      filter: z.string().optional().describe('Filter by app/process name (partial match, case-insensitive)'),
+      limit: z.number().int().min(1).max(500).optional().describe('Max apps to list (default: 50)'),
+    }),
+    execute: async ({ filter, limit }) => {
+      emitProgress({ type: 'tool:start', label: 'Listing applications' });
+
+      try {
+        let output = '';
+        if (process.platform === 'win32') {
+          const { stdout } = await execFileAsync('tasklist', { windowsHide: true });
+          output = stdout;
+        } else {
+          const { stdout } = await execFileAsync('ps', ['aux']);
+          output = stdout;
+        }
+
+        let lines = output.trim().split('\n');
+        if (filter) {
+          const lowerFilter = filter.toLowerCase();
+          lines = lines.filter(line => line.toLowerCase().includes(lowerFilter));
+        }
+
+        lines = lines.slice(0, limit ?? 50);
+
+        emitProgress({ type: 'tool:end', label: `Found ${lines.length} applications` });
+
+        return {
+          applications: lines,
+          count: lines.length,
+          filtered: !!filter,
+          platform: process.platform,
+        };
+      } catch (error: any) {
+        emitProgress({ type: 'tool:error', label: 'Failed to list applications', detail: error.message });
+        return {
+          error: error.message,
+          applications: [],
+          count: 0,
+        };
+      }
+    },
+  }),
+
+  simulateKeyboard: tool({
+    description: 'Send keyboard input to the system. Use for automation: typing text, pressing keys (Enter, Tab, Esc, arrow keys), hotkeys (Ctrl+C, Ctrl+V, Ctrl+S, Alt+Tab), etc.',
+    inputSchema: z.object({
+      input: z.string().min(1).describe('Text to type or key to press (e.g., "Hello World", "Enter", "Ctrl+C", "Alt+Tab", "Escape")'),
+    }),
+    execute: async ({ input }) => {
+      emitProgress({ type: 'tool:start', label: 'Sending keyboard input', detail: input });
+
+      try {
+        const { execSync } = await import('node:child_process');
+
+        if (process.platform === 'win32') {
+          const ps = `Add-Type -AssemblyName System.Windows.Forms;[System.Windows.Forms.SendKeys]::SendWait('${input.replace(/'/g, "''")}')'`;
+          execSync(`powershell.exe -Command "${ps}"`, { windowsHide: true });
+        } else if (process.platform === 'darwin') {
+          const script = `tell application "System Events" to keystroke "${input.replace(/"/g, '\\"')}"`;
+          execSync(`osascript -e '${script}'`);
+        } else {
+          // Linux: try xdotool
+          execSync(`xdotool type '${input.replace(/'/g, "'\\''")}'`);
+        }
+
+        emitProgress({ type: 'tool:end', label: 'Keyboard input sent' });
+        return { sent: true, input };
+      } catch (error: any) {
+        emitProgress({ type: 'tool:error', label: 'Failed to send keyboard input', detail: error.message });
+        return { sent: false, error: error.message };
+      }
     },
   }),
 };

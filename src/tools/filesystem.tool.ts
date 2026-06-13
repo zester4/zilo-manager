@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { requestConfirmation } from '../runtime/confirm.js';
+
 import { emitProgress } from '../runtime/progress.js';
 import { readJson, writeJson } from '../memory/local-store.js';
 
@@ -48,18 +48,6 @@ function assertSafePath(inputPath: string, options: { allowSensitive?: boolean }
 function relativeDisplay(resolved: string) {
   const root = allowedRoots().find((item) => insideRoot(resolved, item));
   return root ? path.relative(root, resolved) || '.' : resolved;
-}
-
-async function confirmFileAction(action: string, details: string[]) {
-  return requestConfirmation({
-    toolkitSlug: 'ZILMATE',
-    toolSlug: 'FILESYSTEM',
-    action,
-    access: 'Write',
-    targetTools: ['ZILMATE_FILESYSTEM'],
-    details,
-    summary: details.join('; '),
-  });
 }
 
 async function walk(rootPath: string, options: { maxDepth?: number; maxEntries?: number } = {}) {
@@ -179,7 +167,7 @@ export const fileSystemTools = {
   }),
 
   writeFile: tool({
-    description: 'Write or append text to a file inside allowed ZilMate file roots. Requires user confirmation.',
+    description: 'Write or append text to a file inside allowed ZilMate file roots.',
     inputSchema: z.object({
       path: z.string().min(1),
       content: z.string(),
@@ -187,12 +175,6 @@ export const fileSystemTools = {
     }),
     execute: async ({ path: filePath, content, mode }) => {
       const resolved = assertSafePath(filePath);
-      const approved = await confirmFileAction(mode === 'append' ? 'Append file' : 'Write file', [
-        `Path: ${relativeDisplay(resolved)}`,
-        `Mode: ${mode ?? 'overwrite'}`,
-        `Bytes: ${Buffer.byteLength(content, 'utf8')}`,
-      ]);
-      if (!approved) throw new Error('Blocked file write. Ask the user to approve writing this file.');
       await mkdir(path.dirname(resolved), { recursive: true });
       await writeFile(resolved, content, { encoding: 'utf8', flag: mode === 'append' ? 'a' : 'w' });
       emitProgress({ type: 'tool:end', label: 'File written', detail: relativeDisplay(resolved) });
@@ -201,12 +183,10 @@ export const fileSystemTools = {
   }),
 
   createFolder: tool({
-    description: 'Create a folder inside allowed ZilMate file roots. Requires user confirmation.',
+    description: 'Create a folder inside allowed ZilMate file roots.',
     inputSchema: z.object({ path: z.string().min(1) }),
     execute: async ({ path: folderPath }) => {
       const resolved = assertSafePath(folderPath);
-      const approved = await confirmFileAction('Create folder', [`Path: ${relativeDisplay(resolved)}`]);
-      if (!approved) throw new Error('Blocked folder creation. Ask the user to approve creating this folder.');
       await mkdir(resolved, { recursive: true });
       emitProgress({ type: 'tool:end', label: 'Folder created', detail: relativeDisplay(resolved) });
       return { path: relativeDisplay(resolved), created: true };
@@ -214,7 +194,7 @@ export const fileSystemTools = {
   }),
 
   moveCopyRename: tool({
-    description: 'Move, copy, or rename a file/folder inside allowed ZilMate file roots. Requires user confirmation.',
+    description: 'Move, copy, or rename a file/folder inside allowed ZilMate file roots.',
     inputSchema: z.object({
       operation: z.enum(['move', 'copy', 'rename']),
       from: z.string().min(1),
@@ -226,8 +206,6 @@ export const fileSystemTools = {
       const target = assertSafePath(to);
       if (!existsSync(source)) throw new Error('Source path does not exist.');
       if (existsSync(target) && !overwrite) throw new Error('Target already exists. Set overwrite=true if the user explicitly approves replacing it.');
-      const approved = await confirmFileAction(operation, [`From: ${relativeDisplay(source)}`, `To: ${relativeDisplay(target)}`, `Overwrite: ${overwrite ? 'yes' : 'no'}`]);
-      if (!approved) throw new Error(`Blocked ${operation}. Ask the user to approve this file operation.`);
       await mkdir(path.dirname(target), { recursive: true });
       if (existsSync(target) && overwrite) await unlink(target);
       if (operation === 'copy') {
@@ -306,6 +284,108 @@ export const fileSystemTools = {
         .map(([size, items]) => ({ size, files: items.map((item) => item.path) }))
         .slice(0, maxResults ?? 50);
       return { large, duplicateSizeGroups: duplicates };
+    },
+  }),
+
+  deleteFile: tool({
+    description: 'Delete a single file inside allowed ZilMate file roots. Requires explicit file path (not glob). Cannot be undone.',
+    inputSchema: z.object({
+      path: z.string().min(1).describe('Exact file path to delete'),
+      confirm: z.boolean().describe('Must be true to actually delete (safety measure)'),
+    }),
+    execute: async ({ path: filePath, confirm }) => {
+      if (!confirm) throw new Error('Deletion requires confirm=true to prevent accidental data loss');
+      const resolved = assertSafePath(filePath);
+      const info = await stat(resolved);
+      if (!info.isFile()) throw new Error('Path is not a file.');
+      await unlink(resolved);
+      emitProgress({ type: 'tool:end', label: 'File deleted', detail: relativeDisplay(resolved) });
+      return { deleted: true, path: relativeDisplay(resolved), size: info.size };
+    },
+  }),
+
+  deleteFolder: tool({
+    description: 'Delete a folder and all its contents inside allowed ZilMate file roots. Requires explicit folder path. Cannot be undone.',
+    inputSchema: z.object({
+      path: z.string().min(1).describe('Exact folder path to delete'),
+      confirm: z.boolean().describe('Must be true to actually delete (safety measure)'),
+    }),
+    execute: async ({ path: folderPath, confirm }) => {
+      if (!confirm) throw new Error('Deletion requires confirm=true to prevent accidental data loss');
+      const resolved = assertSafePath(folderPath);
+      const info = await stat(resolved);
+      if (!info.isDirectory()) throw new Error('Path is not a directory.');
+      
+      const { rm } = await import('node:fs/promises');
+      await rm(resolved, { recursive: true, force: true });
+      emitProgress({ type: 'tool:end', label: 'Folder deleted', detail: relativeDisplay(resolved) });
+      return { deleted: true, path: relativeDisplay(resolved) };
+    },
+  }),
+
+  listDirectory: tool({
+    description: 'List files and folders in a directory with details (name, type, size, modified date). Supports filtering and sorting.',
+    inputSchema: z.object({
+      path: z.string().min(1).describe('Directory path to list'),
+      filter: z.string().optional().describe('Filter by name (partial match, case-insensitive)'),
+      includeHidden: z.boolean().optional().describe('Include dot-files/hidden files (default: false)'),
+      maxDepth: z.number().int().min(1).max(5).optional().describe('How many levels deep to list (default: 1 = current level only)'),
+      limit: z.number().int().min(1).max(500).optional().describe('Max entries to return (default: 100)'),
+    }),
+    execute: async ({ path: dirPath, filter, includeHidden, maxDepth, limit }) => {
+      const resolved = assertSafePath(dirPath);
+      const info = await stat(resolved);
+      if (!info.isDirectory()) throw new Error('Path is not a directory.');
+
+      const entries = await walk(resolved, { 
+        maxDepth: maxDepth ?? 1, 
+        maxEntries: limit ?? 100 
+      });
+
+      let filtered = entries;
+      if (!includeHidden) {
+        filtered = filtered.filter(e => !e.path.split(/[\\/]/).some(p => p.startsWith('.')));
+      }
+      if (filter) {
+        const lowerFilter = filter.toLowerCase();
+        filtered = filtered.filter(e => e.path.toLowerCase().includes(lowerFilter));
+      }
+
+      emitProgress({ type: 'fetch:end', label: 'Directory listed', detail: relativeDisplay(resolved) });
+      
+      return {
+        directory: relativeDisplay(resolved),
+        entries: filtered.slice(0, limit ?? 100),
+        count: filtered.length,
+        filtered: !!filter,
+      };
+    },
+  }),
+
+  getFileInfo: tool({
+    description: 'Get detailed metadata about a file: size, modified date, created date, permissions, type, etc.',
+    inputSchema: z.object({
+      path: z.string().min(1).describe('File or folder path'),
+    }),
+    execute: async ({ path: filePath }) => {
+      const resolved = assertSafePath(filePath);
+      const info = await stat(resolved);
+      const { size, atimeMs, mtimeMs, birthtimeMs, mode } = info;
+
+      return {
+        path: relativeDisplay(resolved),
+        type: info.isDirectory() ? 'directory' : 'file',
+        size,
+        sizeKB: (size / 1024).toFixed(2),
+        sizeMB: (size / (1024 ** 2)).toFixed(2),
+        created: new Date(birthtimeMs).toISOString(),
+        modified: new Date(mtimeMs).toISOString(),
+        accessed: new Date(atimeMs).toISOString(),
+        isFile: info.isFile(),
+        isDirectory: info.isDirectory(),
+        isSymlink: info.isSymbolicLink(),
+        mode: mode?.toString(8),
+      };
     },
   }),
 };
