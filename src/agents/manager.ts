@@ -13,6 +13,7 @@ import { createDeveloperHelperAgent } from './developer-helper.agent.js';
 import { createSecurityAgent } from './security.agent.js';
 import { createCodingAgent } from './coding.agent.js';
 import { createGoalManagerAgent } from './goal-manager.agent.js';
+import { createFinanceAgent } from './finance.agent.js';
 import { limits } from '../safety/limits.js';
 import { emitProgress, type ProgressEvent, withProgressListener } from '../runtime/progress.js';
 import { type ConfirmationHandler, withConfirmationHandler } from '../runtime/confirm.js';
@@ -274,6 +275,7 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
   const security = createSecurityAgent(runId);
   const coding = createCodingAgent(runId);
   const goalManager = createGoalManagerAgent();
+  const finance = createFinanceAgent(runId);
   const scratchpadTools = createScratchpadTools(runId);
   const composioTools = await createComposioTools(options.sessionId || 'default');
 
@@ -330,6 +332,10 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
       }, { agent: 'coding', trackSteps: true }),
       goalManager: subagentTool('goalManager', 'Break goals into actionable steps, timelines, dependencies, and optional scheduled follow-ups.', async (prompt, abortSignal) => {
         const result = await goalManager.generate(agentInput(prompt, abortSignal));
+        return result.text;
+      }),
+      finance: subagentTool('finance', 'Financial analysis, market data, and business reporting using Yahoo Finance.', async (prompt, abortSignal) => {
+        const result = await finance.generate(agentInput(prompt, abortSignal));
         return result.text;
       }),
       ...ziloDocsTools,
