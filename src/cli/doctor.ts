@@ -11,6 +11,7 @@ import { workspaceLayout } from '../workspace/paths.js';
 import { getLocalDataRoot } from '../memory/local-store.js';
 import { cloudflareTunnelDoctor } from './tunnel.js';
 import { skillsRegistryDoctor } from '../skills/registry.js';
+import { checkDependency } from '../observability/doctor.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail';
 
@@ -183,6 +184,20 @@ export async function runDoctor(options: { live?: boolean; sessionId?: string } 
     name: 'Documents',
     status: 'pass',
     detail: 'PDF + slide deck generation available (pdfkit, pptxgenjs)',
+  });
+
+  const hasPlaywright = await checkDependency('npx playwright --version').catch(() => false);
+  checks.push({
+    name: 'Browser Automation',
+    status: hasPlaywright ? 'pass' : 'warn',
+    detail: hasPlaywright ? 'Playwright is available' : 'Run: npx playwright install',
+  });
+
+  const hasRembg = await checkDependency('rembg --version').catch(() => false);
+  checks.push({
+    name: 'Image Intelligence',
+    status: hasRembg ? 'pass' : 'warn',
+    detail: hasRembg ? 'rembg is available' : 'Run: pip install rembg',
   });
 
   const skillsRegistry = await skillsRegistryDoctor();
