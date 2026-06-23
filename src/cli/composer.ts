@@ -11,6 +11,10 @@ export async function readComposerLine(
   console.log(boxLine('top', w));
   console.log(theme.accent('│ ') + theme.dim(placeholder));
   const answer = await rl.question(theme.accent('│ ') + theme.brandBright('> '));
-  console.log(boxLine('bot', w));
+
+  // Clear the input area (placeholder, top line, user input, and extra newline)
+  // so we can replace it with the nicely formatted wrapped box in printUserTurn
+  process.stdout.write('\x1b[1A\x1b[2K\x1b[1A\x1b[2K\x1b[1A\x1b[2K\x1b[1A\x1b[2K');
+
   return answer;
 }
