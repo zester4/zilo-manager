@@ -45,9 +45,12 @@ export function printUserTurn(message: string) {
   const innerWidth = Math.max(10, w - padding - 2);
   const lines = wrapText(message, innerWidth);
 
+  // Filter out excessive empty lines that might come from pasting
+  const displayLines = lines.filter((line, i) => line.trim() || (i > 0 && lines[i-1].trim()));
+
   console.log('');
   console.log(boxLine('top', w));
-  for (const line of lines) {
+  for (const line of displayLines) {
     console.log(theme.accent('│ ') + theme.textBright(`> ${line}`));
   }
   console.log(boxLine('bot', w));
