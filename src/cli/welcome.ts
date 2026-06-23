@@ -26,10 +26,12 @@ export async function printWelcomeScreen() {
     ['QStash', statusText(config.auth.qstash && config.auth.jobWebhookUrl, 'ready')],
     ['Trigger workflows', statusText(config.auth.triggerWorkflows, 'enabled')],
     ['Voice', statusText(config.auth.voice && config.auth.deepgram, 'ready')],
+    ['Digital Corporation', statusText(true, 'ready')],
   ]);
 
   printTable(['Command', 'What it does'], [
     ['zilmate talk', 'Start the interactive assistant'],
+    ['zilmate swarm', 'Run the Digital Corporation swarm'],
     ['zilmate menu', 'Open the guided main menu'],
     ['zilmate', 'Open status plus the guided launcher'],
     ['zilmate update', 'Update CLI and SDK from npm'],

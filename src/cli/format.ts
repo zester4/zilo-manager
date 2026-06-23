@@ -310,9 +310,17 @@ function printProgressWithSpinner(event: ProgressEvent) {
   }
 
   if (event.type === 'subagent:start') {
-    console.log(chalk.magenta(`\n╭─ ${event.agent || 'subagent'} ─ ${event.label}`));
+    const isDept = event.agent?.startsWith('dept:');
+    const deptName = isDept ? event.agent!.split(':')[1] : null;
+    const color = deptName === 'Strategy' ? chalk.hex('#0EA5E9') :
+                  deptName === 'Engineering' ? chalk.hex('#F43F5E') :
+                  deptName === 'Growth' ? chalk.hex('#10B981') :
+                  deptName === 'Operations' ? chalk.hex('#F59E0B') :
+                  deptName === 'Data' ? chalk.hex('#8B5CF6') : chalk.magenta;
+
+    console.log(color(`\n╭─ ${event.agent || 'subagent'} ─ ${event.label}`));
     if (event.detail) console.log(chalk.gray(`│  ${clip(event.detail, maxWidth() - 6)}`));
-    console.log(chalk.magenta('╰─'));
+    console.log(color('╰─'));
     return;
   }
 

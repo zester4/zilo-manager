@@ -12,8 +12,8 @@ export function printWelcomeCard(options: {
   const w = termWidth(92);
   console.log('');
   console.log(boxLine('top', w));
-  console.log(theme.accent('│ ') + theme.textBright('* Welcome to ZilMate'));
-  console.log(theme.accent('│ ') + theme.muted('/help commands · /model pick · /voice · /exit'));
+  console.log(theme.accent('│ ') + theme.textBright('* Welcome to ZilMate CEO Dashboard'));
+  console.log(theme.accent('│ ') + theme.muted('/help commands · /swarm business · /model pick · /exit'));
   console.log(theme.accent('│ ') + theme.muted(`cwd: ${options.cwd}`));
   if (options.workspace) {
     console.log(theme.accent('│ ') + theme.muted(`workspace: ${options.workspace}`));
@@ -25,9 +25,10 @@ export function printWelcomeCard(options: {
 
 export function printTips() {
   const tips = [
-    'Use /model pick to choose your manager, coding, and image models.',
+    'Use /swarm to launch the Digital Corporation hierarchical agent fleet.',
     'ZilMate knows your workspace, git status, jobs, and memory — ask it to continue where you left off.',
     'Delegate coding to the coding agent; it can spawn appBuilder and qaIntegration sub-coders.',
+    'Real-world business tools (Stripe, HubSpot, GitHub) are available through departmental agents.',
     'Run /heal after long sessions to save learnings to your notebook and knowledge graph.',
   ];
   console.log(theme.textBright('Tips for getting started:'));

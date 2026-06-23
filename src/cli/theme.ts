@@ -20,6 +20,12 @@ export const theme = {
   tool: chalk.hex('#A78BFA'),
   subagent: chalk.hex('#F472B6'),
   thinking: chalk.hex('#FB923C'),
+  // Department colors
+  deptStrategy: chalk.hex('#0EA5E9'),
+  deptEngineering: chalk.hex('#F43F5E'),
+  deptGrowth: chalk.hex('#10B981'),
+  deptOperations: chalk.hex('#F59E0B'),
+  deptData: chalk.hex('#8B5CF6'),
 };
 
 export function termWidth(max = 100) {

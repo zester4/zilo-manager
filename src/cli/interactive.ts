@@ -20,6 +20,7 @@ import { printModelBrowser, runModelPicker } from './models.js';
 import { readComposerLine } from './composer.js';
 import { printAssistantTurn, printTips, printUserTurn, printWelcomeCard } from './render.js';
 import { theme } from './theme.js';
+import { runSwarmCli } from './swarm.js';
 
 function transcript(turns: ChatTurn[]) {
   if (turns.length === 0) return '';
@@ -72,10 +73,20 @@ export async function startInteractiveChat(sessionId = 'default') {
         console.log(theme.textBright('Commands'));
         console.log(`  ${theme.brand('/exit')}        Quit`);
         console.log(`  ${theme.brand('/clear')}       Clear session history`);
+        console.log(`  ${theme.brand('/swarm')}       Launch Digital Corporation task`);
         console.log(`  ${theme.brand('/voice')}       Start live voice mode`);
         console.log(`  ${theme.brand('/model')}       Browse AI Gateway models`);
         console.log(`  ${theme.brand('/model pick')}  Choose manager/coding/image models`);
         console.log(`  ${theme.brand('/model next')}  Next model page`);
+        continue;
+      }
+      if (message === '/swarm' || message.startsWith('/swarm ')) {
+        const swarmTask = message.slice('/swarm'.length).trim();
+        if (!swarmTask) {
+          console.log(theme.warn('Provide a business task, e.g. /swarm "Analyze our Q1 revenue trends"'));
+          continue;
+        }
+        await runSwarmCli(swarmTask, { session: sessionId });
         continue;
       }
       if (message === '/model pick') {
