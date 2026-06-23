@@ -1,3 +1,4 @@
+// ZilMate handles cloudflared as an external dependency; it is not automatically downloaded.
 import { spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
