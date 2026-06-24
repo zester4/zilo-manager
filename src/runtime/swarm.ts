@@ -1,11 +1,11 @@
-﻿import { type Tool, ToolLoopAgent, stepCountIs, tool } from 'ai';
+import { type Tool, ToolLoopAgent, stepCountIs, tool } from 'ai';
 import { z } from 'zod';
 import { models } from '../config/models.js';
 import { limits } from '../safety/limits.js';
 import { ReportGenerator } from './swarm/reports.js';
 import { createComposioTools } from '../tools/composio.tool.js';
 
-export type SwarmDepartment = 'Strategy' | 'Engineering' | 'Growth' | 'Operations' | 'Data';
+export type SwarmDepartment = 'Strategy' | 'Engineering' | 'Growth' | 'Operations' | 'Data' | 'Security' | 'Revenue';
 
 export interface SwarmAgentConfig {
   name: string;
@@ -21,11 +21,23 @@ export class SwarmAgent {
 
   constructor(private config: SwarmAgentConfig) {}
 
+  private getDeptModel(): string {
+    const dept = this.config.department;
+    if (dept === 'Strategy') return models.deptStrategy;
+    if (dept === 'Engineering') return models.deptEngineering;
+    if (dept === 'Growth') return models.deptGrowth;
+    if (dept === 'Operations') return models.deptOperations;
+    if (dept === 'Data') return models.deptData;
+    if (dept === 'Security') return models.deptSecurity;
+    if (dept === 'Revenue') return models.deptRevenue;
+    return models.chat;
+  }
+
   async init(sessionId: string = 'default') {
     const composioTools = await createComposioTools(sessionId);
 
     this.agent = new ToolLoopAgent({
-      model: models.chat,
+      model: this.getDeptModel(),
       instructions: [
         `You are ${this.config.name}, a specialist in the ${this.config.department} department.`,
         this.config.instructions,
@@ -79,6 +91,8 @@ export class SwarmOrchestrator {
     ['growth', ['growthHacker', 'seoExpert', 'contentWriter', 'socialMediaManager', 'salesOps', 'adsManager']],
     ['operations', ['financeAnalyst', 'customerSuccess', 'legalCounsel', 'hrRecruiter', 'logisticsLead']],
     ['data', ['dataScientist', 'biReporter']],
+    ['security', ['securityAnalyst', 'redTeam', 'blueTeam']],
+    ['revenue', ['enterpriseSales', 'channelPartner', 'affiliateManager']],
   ]);
 
   private constructor() {}
@@ -95,7 +109,7 @@ export class SwarmOrchestrator {
     const { object } = await generateObject({
       model: models.manager,
       schema: z.object({
-        department: z.enum(['strategy', 'engineering', 'growth', 'operations', 'data', 'general']),
+        department: z.enum(['strategy', 'engineering', 'growth', 'operations', 'data', 'security', 'revenue', 'general']),
         subagent: z.string(),
         reasoning: z.string(),
       }),
