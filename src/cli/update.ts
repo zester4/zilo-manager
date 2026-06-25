@@ -89,13 +89,13 @@ export async function runSelfUpdate(options: { tag?: string; dryRun?: boolean } 
   } catch (error) {
     let detail = error instanceof Error ? error.message : String(error);
 
-    // Clean up common messy npm error output
-    if (detail.includes('npm warn deprecated')) {
-      const parts = detail.split('\n');
-      const filtered = parts.filter(p => !p.includes('npm warn deprecated'));
-      if (filtered.length > 0) {
-        detail = filtered.join('\n').trim();
-      }
+    // Clean up noisy deprecation warnings that often clutter npm error output
+    detail = detail.replace(/npm warn deprecated [^\n]+/gi, '');
+
+    // Remove the redundant "Command failed" prefix if we have more interesting info
+    const commandPrefix = /Command failed: [^\n]+/i;
+    if (detail.match(commandPrefix) && detail.length > 100) {
+      detail = detail.replace(commandPrefix, '').trim();
     }
 
     const tips: [string, string][] = [
@@ -103,9 +103,9 @@ export async function runSelfUpdate(options: { tag?: string; dryRun?: boolean } 
       ['Try', `${npmCommand()} install -g ${spec}`],
     ];
 
-    if (process.platform === 'win32' && detail.includes('EPERM')) {
+    if (process.platform === 'win32' && detail.toLowerCase().includes('eperm')) {
       tips.push(['Note', 'Try running your terminal as Administrator']);
-    } else if (detail.includes('EACCES')) {
+    } else if (detail.toLowerCase().includes('eacces')) {
       tips.push(['Note', 'Try running with sudo']);
     }
 
