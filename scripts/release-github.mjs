@@ -12,7 +12,7 @@ const title = `ZilMate ${tag}`;
 
 const notes = `# ${title}
 
-ZilMate ${tag} — Claude-inspired CLI, situational awareness, session handoffs, model picker, and SDK docs.
+ZilMate ${tag} — Chat SDK listener, multi-platform messaging, and TypeScript hardening.
 
 ## Install
 
@@ -25,21 +25,18 @@ zilmate talk
 
 ## Highlights
 
-- **Beautiful CLI** — welcome card, tips, boxed composer input, Claude-style tool progress (\`● tool\` / \`└ Done\`).
-- **/model pick** — interactively choose manager, coding, image, and vision models; persisted to workspace \`config/models.json\`.
-- **Situational awareness** — \`getSituationBrief\` snapshots cwd, git, workspace, jobs, memory, models, and capabilities.
-- **Session continuity** — handoff save/load/generate so ZilMate resumes where you left off.
-- **Coding intelligence** — five tools: grep, working-tree review, symbol explain, scaffold, project checks; appBuilder + qaIntegration sub-coders.
-- **Image director** — \`enhanceImagePrompt\` + generation with art-direction presets.
-- **Cloudflare setup** — dedicated tunnel section in \`zilmate setup\`; \`zilmate jobs listen --tunnel\`.
-- **SDK.md** — Next.js App Router streaming route, subagents, jobs, voice, model selection.
+- **Chat SDK Listener** — \`zilmate chat listen\` starts a persistent listener for Slack, Telegram, and iMessage using the Chat SDK. Incoming @-mentions are routed through the ZilMate manager agent and replies are posted back to the thread.
+- **Multi-platform setup** — \`zilmate chat setup\` interactive wizard for Slack bot tokens, Telegram bot tokens, and iMessage (local macOS DB or remote Sendblue). Also supports noninteractive \`--flags\`.
+- **Chat subcommand group** — \`zilmate chat setup\`, \`zilmate chat listen\`, and \`zilmate chat msg "hello"\` (one-shot) under a single \`chat\` namespace. Also aliased as \`npm run chat\`.
+- **TS error fixes** — resolved 6 TypeScript errors across adapter configs, Message/Thread API surface, and strict optional property types.
+- **Memory state adapter** — uses \`@chat-adapter/state-memory\` for in-process subscription/lock/dedupe storage during \`chat listen\`.
 
 ## Quick Checks
 
 \`\`\`powershell
-zilmate talk
-/model pick
-zilmate jobs listen --tunnel
+zilmate chat setup
+zilmate chat listen
+zilmate chat msg "hello"
 \`\`\`
 
 ## npm
