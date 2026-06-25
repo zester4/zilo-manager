@@ -5,6 +5,8 @@ import type { Tokens } from 'marked';
 import type { ProgressEvent } from '../runtime/progress.js';
 import { createActivitySpinner, type ActivitySpinner } from './spinner.js';
 import { getDeptTheme, agentCard, toolBadge, theme as zilTheme } from './theme.js';
+import { cliSettings } from './settings.js';
+import { renderTerminalImage } from './image-preview.js';
 
 const maxWidth = () => Math.min(process.stdout.columns || 96, 110);
 const divider = (color = chalk.gray) => color('─'.repeat(Math.min(maxWidth(), 88)));
@@ -65,6 +67,12 @@ function renderList(token: Tokens.List, indent = 0) {
 function renderCode(token: Tokens.Code) {
   const text = token.text.trim();
   const border = chalk.gray('│');
+  const isDiff = text.includes('--- a/') || text.includes('+++ b/') || text.startsWith('diff --git');
+
+  if (isDiff) {
+    return highlightDiff(text).split('\n').map(l => `${border} ${l}`).join('\n');
+  }
+
   return text.split('\n').map(line => `${border} ${chalk.yellow(line)}`).join('\n');
 }
 
@@ -278,6 +286,9 @@ export function createProgressPrinter() {
 }
 
 function printProgressWithSticky(event: ProgressEvent) {
+  if (cliSettings.logLevel === 'quiet') return;
+  if (cliSettings.logLevel === 'normal' && ['step'].includes(event.type)) return;
+
   if (event.type === 'thinking') {
     const detail = event.detail ? ` ${chalk.gray(`(${event.detail})`)}` : '';
     logUpdate(`${zilTheme.thinking('✶')} ${zilTheme.thinking(event.label || 'Thinking')}${detail} ${chalk.gray('(Ctrl+C to interrupt)')}`);
@@ -300,6 +311,14 @@ function printProgressWithSticky(event: ProgressEvent) {
 
   if (event.type === 'tool:end') {
     console.log(chalk.gray('  └ ') + toolBadge(event.label, 'end') + (event.detail ? chalk.gray(` · ${event.detail.slice(0, 100)}`) : ''));
+
+    // Auto-detect image paths in detail and render them
+    if (event.detail && /\.(png|jpg|jpeg|webp)\b/i.test(event.detail)) {
+      const match = event.detail.match(/\b\/?(?:[\w.-]+\/)*[\w.-]+\.(?:png|jpg|jpeg|webp)\b/i);
+      if (match && match[0]) {
+        renderTerminalImage(match[0]).catch(() => undefined);
+      }
+    }
     return;
   }
 
@@ -349,10 +368,27 @@ function printProgressWithSticky(event: ProgressEvent) {
   const icon = icons[event.type];
   const color = colors[event.type];
   const prefix = event.agent && event.type.startsWith('subagent') ? chalk.magenta(`[${event.agent}] `) : '';
-  const detail = event.detail ? chalk.gray(` — ${event.detail.length > 120 ? `${event.detail.slice(0, 117)}...` : event.detail}`) : '';
+
+  const isLong = event.detail && event.detail.length > 300;
+  const detailText = isLong ? `${event.detail!.slice(0, 297)}...` : event.detail;
+  const detail = detailText ? chalk.gray(` — ${detailText}`) : '';
+
   console.log(`${prefix}${color(`${icon} ${event.label}`)}${detail}`);
 }
 
 export function printError(message: string) {
   console.error(chalk.red(message));
+}
+
+/**
+ * Basic syntax highlighting for git diffs
+ */
+export function highlightDiff(diff: string) {
+  return diff.split('\n').map(line => {
+    if (line.startsWith('+') && !line.startsWith('+++')) return chalk.green(line);
+    if (line.startsWith('-') && !line.startsWith('---')) return chalk.red(line);
+    if (line.startsWith('@@')) return chalk.cyan(line);
+    if (line.startsWith('diff --git')) return chalk.bold.white(line);
+    return line;
+  }).join('\n');
 }

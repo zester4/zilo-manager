@@ -1,4 +1,4 @@
-﻿import { type ProgressEvent, emitProgress } from '../runtime/progress.js';
+import { type ProgressEvent, emitProgress } from '../runtime/progress.js';
 import type { LanguageModelUsage } from 'ai';
 
 export type SessionMetrics = {
@@ -9,6 +9,7 @@ export type SessionMetrics = {
   };
   estimatedCost: number;
   requestCount: number;
+  costHistory: number[];
 };
 
 const sessionStore = new Map<string, SessionMetrics>();
@@ -21,6 +22,7 @@ export function trackUsage(sessionId: string, usage: LanguageModelUsage) {
     tokens: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     estimatedCost: 0,
     requestCount: 0,
+    costHistory: [],
   };
 
   const prompt = usage.inputTokens ?? 0;
@@ -32,8 +34,10 @@ export function trackUsage(sessionId: string, usage: LanguageModelUsage) {
   current.tokens.totalTokens += total;
   current.requestCount += 1;
 
-  // Simple linear cost estimation
-  current.estimatedCost = (current.tokens.totalTokens / 1000) * COST_PER_1K_TOKENS;
+  const cost = (total / 1000) * COST_PER_1K_TOKENS;
+  current.estimatedCost += cost;
+  current.costHistory.push(cost);
+  if (current.costHistory.length > 20) current.costHistory.shift();
 
   sessionStore.set(sessionId, current);
 
@@ -49,5 +53,6 @@ export function getSessionMetrics(sessionId: string): SessionMetrics {
     tokens: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     estimatedCost: 0,
     requestCount: 0,
+    costHistory: [],
   };
 }

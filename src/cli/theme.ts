@@ -100,3 +100,30 @@ export function toolBadge(name: string, status: 'start' | 'end' | 'error' = 'sta
   const color = status === 'start' ? theme.tool : status === 'error' ? theme.error : theme.ok;
   return color(`${icon} [${name}]`);
 }
+
+/**
+ * Renders a simple ASCII progress bar
+ */
+export function progressBar(current: number, total: number, width = 20) {
+  const percent = Math.min(Math.max(current / total, 0), 1);
+  const filled = Math.round(width * percent);
+  const empty = width - filled;
+  const bar = theme.ok('█'.repeat(filled)) + theme.dim('░'.repeat(empty));
+  return `[${bar}] ${Math.round(percent * 100)}%`;
+}
+
+/**
+ * Renders a simple ASCII sparkline for a trend of numbers
+ */
+export function sparkline(values: number[], width = 10) {
+  if (values.length === 0) return '';
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const chars = [' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+  return values.slice(-width).map(v => {
+    const idx = Math.floor(((v - min) / range) * (chars.length - 1));
+    return chars[idx];
+  }).join('');
+}

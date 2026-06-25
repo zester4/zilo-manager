@@ -346,7 +346,7 @@ voice
     try {
       const command = await runTerminalVoiceLive(options.session);
       if (command === 'talk') {
-        await startInteractiveChat(options.session);
+        await startInteractiveChat({ sessionId: options.session });
       }
     } catch (error) {
       printError(friendlyError(error));
@@ -816,7 +816,7 @@ program
   .description('Start an interactive chat with the main manager agent')
   .action(async (options: { session: string }) => {
     try {
-      await startInteractiveChat(options.session);
+      await startInteractiveChat({ sessionId: options.session });
     } catch (error) {
       printError(friendlyError(error));
       process.exitCode = 1;
