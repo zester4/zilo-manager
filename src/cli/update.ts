@@ -98,7 +98,7 @@ export async function runSelfUpdate(options: { tag?: string; dryRun?: boolean } 
     // Clean up common messy npm error output
     if (detail.includes('npm warn deprecated')) {
       const parts = detail.split('\n');
-      const filtered = parts.filter( (p: string) => !p.includes('npm warn deprecated'));
+      const filtered = parts.filter((p: string) => !p.includes('npm warn deprecated'));
       if (filtered.length > 0) {
         detail = filtered.join('\n').trim();
       }
