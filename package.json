@@ -1,6 +1,6 @@
 {
   "name": "zilmate",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "Production-grade CLI multi-agent AI assistant, real-time voice controller, and automated background job scheduler for local and cloud environments.",
   "type": "module",
   "main": "dist/server.js",
@@ -54,8 +54,8 @@
     "@chat-adapter/slack": "^4.31.0",
     "@chat-adapter/state-memory": "^4.31.0",
     "@chat-adapter/telegram": "^4.31.0",
-    "@composio/core": "^0.11.0",
-    "@composio/vercel": "^0.9.3",
+    "@composio/core": "^0.13.1",
+    "@composio/vercel": "^0.11.0",
     "@daytona/sdk": "^0.190.1",
     "@deepgram/sdk": "^4.11.2",
     "@mendable/firecrawl-js": "^4.28.2",
