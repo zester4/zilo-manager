@@ -1,6 +1,8 @@
 'use client'
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+
 const navItems = [
   { name: 'Dashboard', href: '/', icon: '📊' },
   { name: 'Swarm', href: '/swarm', icon: '🐝' },
@@ -8,10 +10,12 @@ const navItems = [
   { name: 'Memory', href: '/memory', icon: '🧠' },
   { name: 'Jobs', href: '/jobs', icon: '⚙️' },
 ];
+
 export function Sidebar() {
   const pathname = usePathname();
+
   return (
-    <aside className="w-64 bg-brand-peach p-6 flex flex-col gap-8 border-r border-brand-rose/10 h-full">
+    <aside className="w-64 bg-brand-peach p-6 flex flex-col gap-8 border-r border-brand-rose/10 h-full shrink-0">
       <h1 className="text-xl font-bold text-brand-rose-dark tracking-tight">ZilMate Swarm</h1>
       <nav className="flex flex-col gap-4 text-sm font-medium">
         {navItems.map((item) => {
@@ -32,6 +36,7 @@ export function Sidebar() {
           );
         })}
       </nav>
+
       <div className="mt-auto p-4 bg-brand-rose/5 rounded-2xl border border-brand-rose/10">
         <div className="text-[10px] uppercase font-bold text-brand-rose tracking-widest mb-1">Status</div>
         <div className="flex items-center gap-2">

@@ -1,6 +1,8 @@
 'use client'
+
 import { useState, useTransition } from 'react';
 import { chatAction } from './actions';
+
 const departments = [
   { name: 'Strategy', status: 95, detail: 'Optimal' },
   { name: 'Engineering', status: 88, detail: 'Optimal' },
@@ -8,15 +10,19 @@ const departments = [
   { name: 'Operations', status: 100, detail: 'Idle' },
   { name: 'Data', status: 84, detail: 'Optimal' },
 ];
+
 export default function Dashboard() {
   const [message, setMessage] = useState('');
   const [chatLog, setChatLog] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
   const [isPending, startTransition] = useTransition();
+
   const handleSend = async () => {
     if (!message.trim()) return;
+
     const userMsg = message;
     setMessage('');
     setChatLog(prev => [...prev, { role: 'user', text: userMsg }]);
+
     startTransition(async () => {
       const result = await chatAction(userMsg);
       if (result.success) {
@@ -26,8 +32,9 @@ export default function Dashboard() {
       }
     });
   };
+
   return (
-    <main className="flex-1 flex flex-col p-8 gap-8 overflow-hidden h-full">
+    <main className="flex-1 flex flex-col p-8 gap-8 overflow-hidden h-full bg-white">
       <header className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-semibold">Command Center</h2>
@@ -38,6 +45,7 @@ export default function Dashboard() {
           <button className="bg-brand-rose text-white px-6 py-2 rounded-full text-sm font-semibold shadow-lg shadow-brand-rose/20 hover:bg-brand-rose-dark transition-all">Analyze Swarm ROI</button>
         </div>
       </header>
+
       <div className="flex-1 flex gap-8 min-h-0">
         <section className="flex-[2] bg-white rounded-2xl shadow-xl shadow-brand-rose/5 border border-brand-rose/5 flex flex-col min-w-0">
           <div className="p-4 border-b border-brand-rose/5 font-semibold text-brand-rose flex items-center gap-2">
@@ -89,6 +97,7 @@ export default function Dashboard() {
             </button>
           </div>
         </section>
+
         <aside className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 min-w-[300px]">
           <section className="bg-white rounded-2xl p-6 shadow-xl shadow-brand-rose/5 border border-brand-rose/5">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Swarm Status</h3>
@@ -108,6 +117,22 @@ export default function Dashboard() {
                       {dept.detail}
                     </div>
                   </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="bg-white rounded-2xl p-6 shadow-xl shadow-brand-rose/5 border border-brand-rose/5">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Recent Swarm Reports</h3>
+            <div className="flex flex-col gap-3">
+              {[
+                { title: 'Q2 Strategic Audit.md', dept: 'Engineering', time: '2h ago' },
+                { title: 'Growth Vectors V3.md', dept: 'Growth', time: '5h ago' },
+                { title: 'Fiscal Forecast.pdf', dept: 'Operations', time: '1d ago' },
+              ].map((report, i) => (
+                <div key={i} className="p-3 bg-brand-peach/30 rounded-xl flex flex-col gap-1 border border-brand-rose/5 cursor-pointer hover:border-brand-rose/30 transition-all hover:bg-brand-peach/50">
+                  <div className="text-xs font-semibold text-brand-rose-dark">{report.title}</div>
+                  <div className="text-[10px] text-gray-500 uppercase tracking-wider">{report.dept} • {report.time}</div>
                 </div>
               ))}
             </div>

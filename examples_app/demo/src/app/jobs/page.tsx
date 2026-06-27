@@ -1,16 +1,20 @@
 'use client'
+
 import { useState, useTransition, useEffect } from 'react';
 import { createJobAction, listJobsAction } from '../actions';
+
 export default function JobsPage() {
   const [task, setTask] = useState('');
   const [jobs, setJobs] = useState<any[]>([]);
   const [isPending, startTransition] = useTransition();
+
   useEffect(() => {
     startTransition(async () => {
       const res = await listJobsAction();
       if (res.success) setJobs(res.jobs || []);
     });
   }, []);
+
   const handleCreate = () => {
     if (!task.trim()) return;
     startTransition(async () => {
@@ -20,13 +24,15 @@ export default function JobsPage() {
       if (res.success) setJobs(res.jobs || []);
     });
   };
+
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-white flex flex-col gap-8">
+    <main className="flex-1 p-8 overflow-y-auto bg-white flex flex-col gap-8 h-full">
       <header>
         <h2 className="text-2xl font-semibold">Automation & Jobs</h2>
         <p className="text-sm text-gray-500">Monitor background swarm tasks and scheduled missions.</p>
       </header>
-      <div className="flex flex-col gap-8">
+
+      <div className="flex flex-col gap-8 pb-8">
         <section className="bg-white rounded-2xl p-6 shadow-xl shadow-brand-rose/5 border border-brand-rose/5">
           <h3 className="text-sm font-bold text-brand-rose uppercase tracking-widest mb-6">Queue Background Mission</h3>
           <div className="flex gap-2">
@@ -46,6 +52,7 @@ export default function JobsPage() {
             </button>
           </div>
         </section>
+
         <section className="bg-white rounded-2xl p-6 shadow-xl shadow-brand-rose/5 border border-brand-rose/5">
           <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">Active Jobs</h3>
           <div className="flex flex-col gap-4">
@@ -61,7 +68,9 @@ export default function JobsPage() {
                 </div>
               </div>
             ))}
-            {jobs.length === 0 && <div className="text-gray-300 text-center py-10 italic">No active jobs queued.</div>}
+            {jobs.length === 0 && (
+              <div className="text-gray-300 text-center py-10 italic">No active jobs queued.</div>
+            )}
           </div>
         </section>
       </div>

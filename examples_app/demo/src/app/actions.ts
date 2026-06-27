@@ -1,6 +1,8 @@
 'use server'
+
 import { getZilMate } from '@/lib/zilmate';
 import { revalidatePath } from 'next/cache';
+
 export async function chatAction(message: string, sessionId: string = 'web-default') {
   try {
     const zilmate = getZilMate(sessionId);
@@ -10,6 +12,7 @@ export async function chatAction(message: string, sessionId: string = 'web-defau
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
+
 export async function researchAction(query: string, sessionId: string = 'web-default') {
   try {
     const zilmate = getZilMate(sessionId);
@@ -19,6 +22,7 @@ export async function researchAction(query: string, sessionId: string = 'web-def
     return { success: false, error: (error as Error).message };
   }
 }
+
 export async function rememberAction(text: string, tags: string[] = []) {
   try {
     const zilmate = getZilMate();
@@ -29,6 +33,7 @@ export async function rememberAction(text: string, tags: string[] = []) {
     return { success: false, error: (error as Error).message };
   }
 }
+
 export async function recallAction(query: string) {
   try {
     const zilmate = getZilMate();
@@ -38,6 +43,7 @@ export async function recallAction(query: string) {
     return { success: false, error: (error as Error).message };
   }
 }
+
 export async function createJobAction(task: string, schedule?: string) {
   try {
     const zilmate = getZilMate();
@@ -48,6 +54,7 @@ export async function createJobAction(task: string, schedule?: string) {
     return { success: false, error: (error as Error).message };
   }
 }
+
 export async function listJobsAction() {
   try {
     const zilmate = getZilMate();
