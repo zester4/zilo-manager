@@ -1,7 +1,7 @@
 {
   "name": "zilmate",
-  "version": "1.8.1",
-  "description": "ZilMate CLI multi-agent assistant for ZiloShift workflows.",
+  "version": "1.9.1",
+  "description": "Production-grade CLI multi-agent AI assistant, real-time voice controller, and automated background job scheduler for local and cloud environments.",
   "type": "module",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
@@ -75,8 +75,8 @@
     "pdfkit": "^0.19.1",
     "playwright": "^1.61.0",
     "pptxgenjs": "^4.0.1",
-    "prebuild-install": "^7.1.3",
     "tsx": "^4.22.4",
+    "undici": "^8.5.0",
     "ws": "^8.21.0",
     "yahoo-finance2": "^3.15.3",
     "zod": "^4.4.3"

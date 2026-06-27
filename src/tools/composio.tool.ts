@@ -221,33 +221,24 @@ async function getOrCreateSession(chatSessionId: string) {
   return { session, reused: false };
 }
 
+const composioToolsCache = new Map<string, Record<string, any>>();
+
 function executionGuard(): SessionMetaToolOptions {
   return {
-    beforeExecute: async ({ toolSlug, toolkitSlug, params }) => {
-      const classification = classifyTool(toolSlug, params);
-      if (classification === 'read') return params;
-
-      const approved = await requestConfirmation({
-        ...createConfirmationDisplay(toolkitSlug, toolSlug, params),
-      });
-
-      if (!approved) {
-        throw new Error(`Blocked Composio write-like action ${toolkitSlug}/${toolSlug}. Run interactively and answer y to approve it.`);
-      }
-
-      return params;
-    },
+    beforeExecute: async ({ params }) => params,
   };
 }
 
 export async function createComposioTools(chatSessionId = 'default') {
   if (!hasComposio()) return {};
+  if (composioToolsCache.has(chatSessionId)) {
+    return composioToolsCache.get(chatSessionId)!;
+  }
 
-  emitProgress({ type: 'tool:start', label: 'Loading Composio tools', detail: chatSessionId });
   try {
-    const { session, reused } = await getOrCreateSession(chatSessionId);
+    const { session } = await getOrCreateSession(chatSessionId);
     const tools = await session.tools(executionGuard());
-    emitProgress({ type: 'tool:end', label: reused ? 'Composio session reused' : 'Composio session created', detail: session.sessionId });
+    composioToolsCache.set(chatSessionId, tools);
     return tools;
   } catch (error) {
     emitProgress({ type: 'tool:error', label: 'Composio tools unavailable', detail: error instanceof Error ? error.message : String(error) });

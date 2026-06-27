@@ -22,14 +22,15 @@ export const theme = {
 
   // Department Colors & Icons
   departments: {
-    Strategy: { color: chalk.hex('#0EA5E9'), icon: '🎯' },
-    Engineering: { color: chalk.hex('#F43F5E'), icon: '🛠️' },
-    Growth: { color: chalk.hex('#10B981'), icon: '📈' },
-    Operations: { color: chalk.hex('#F59E0B'), icon: '⚙️' },
-    Data: { color: chalk.hex('#8B5CF6'), icon: '📊' },
-    Security: { color: chalk.hex('#14B8A6'), icon: '🛡️' },
-    Revenue: { color: chalk.hex('#EC4899'), icon: '💰' },
-    General: { color: chalk.hex('#94A3B8'), icon: '🌐' },
+    Strategy:    { color: chalk.hex('#0EA5E9'), icon: '🎯' },
+    Engineering: { color: chalk.hex('#F43F5E'), icon: '🛠️ ' },
+    Development: { color: chalk.hex('#06B6D4'), icon: '🧱' },
+    Growth:      { color: chalk.hex('#10B981'), icon: '📈' },
+    Operations:  { color: chalk.hex('#F59E0B'), icon: '⚙️ ' },
+    Data:        { color: chalk.hex('#8B5CF6'), icon: '📊' },
+    Security:    { color: chalk.hex('#14B8A6'), icon: '🛡️ ' },
+    Revenue:     { color: chalk.hex('#EC4899'), icon: '💰' },
+    General:     { color: chalk.hex('#94A3B8'), icon: '🌐' },
   }
 };
 
@@ -79,21 +80,6 @@ export function boxLine(char: 'top' | 'mid' | 'bot', width: number, customColor 
   return theme.panel(`├${'─'.repeat(inner)}┤`);
 }
 
-export function agentCard(agentName: string, dept: string, content: string, width = 80) {
-  const { color, icon } = getDeptTheme(dept);
-  const innerWidth = width - 4;
-  const lines = wrapText(content, innerWidth);
-
-  const header = color(`╭─ ${icon} ${agentName.toUpperCase()} ──`);
-  const top = header + color('─'.repeat(Math.max(0, width - header.length - 1)) + '╮');
-
-  const result = [top];
-  for (const line of lines) {
-    result.push(color('│ ') + theme.text(line) + color(' │'));
-  }
-  result.push(color(`╰${'─'.repeat(width - 2)}╯`));
-  return result.join('\n');
-}
 
 export function toolBadge(name: string, status: 'start' | 'end' | 'error' = 'start') {
   const icon = status === 'start' ? '▶' : status === 'error' ? '✖' : '✔';

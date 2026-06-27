@@ -37,7 +37,9 @@ export class SwarmAgent {
 
   async init(sessionId: string = 'default') {
     const composioTools = await createComposioTools(sessionId);
-    const mcpTools = await createMCPTools();
+    const mcpTools = await createMCPTools({
+      excludeServers: ['filesystem', 'git', 'playwright']
+    });
 
     this.agent = new ToolLoopAgent({
       model: this.getDeptModel(),
@@ -71,9 +73,19 @@ export class SwarmAgent {
     if (!this.agent) {
       await this.init();
     }
+    
+    const { describeTool, toolNamesFromStep } = await import('./tool-utils.js');
+    const { emitProgress } = await import('./progress.js');
+
     const result = await this.agent!.generate({
       prompt,
-      ...(abortSignal ? { abortSignal } : {})
+      ...(abortSignal ? { abortSignal } : {}),
+      onStepFinish: (step: any) => {
+        const tools = toolNamesFromStep(step);
+        if (tools.length > 0) {
+          emitProgress({ type: 'step', label: `${this.config.name} selected tools`, detail: tools.map(describeTool).join(', ') });
+        }
+      }
     } as any);
     return result.text;
   }

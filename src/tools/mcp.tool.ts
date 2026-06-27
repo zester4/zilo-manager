@@ -3,7 +3,7 @@ import { Experimental_StdioMCPTransport } from '@ai-sdk/mcp/mcp-stdio';
 import { tool } from 'ai';
 import { z } from 'zod';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, openSync } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { workspaceLayout } from '../workspace/paths.js';
@@ -27,7 +27,7 @@ export type MCPConfig = {
 
 const activeClients: Map<string, { client: any; tools: Record<string, any> }> = new Map();
 
-function getDefaultMCPServers(): MCPServerConfig[] {
+export function getDefaultMCPServers(): MCPServerConfig[] {
   const layout = workspaceLayout();
   const home = homedir();
 
@@ -57,21 +57,15 @@ function getDefaultMCPServers(): MCPServerConfig[] {
       name: 'git',
       type: 'stdio',
       command: 'npx',
-      args: ['-y', 'git-mcp-server'],
+      // git-mcp-server is not a real npm package; use the published @cyanheads fork
+      args: ['-y', '@cyanheads/git-mcp-server'],
       enabled: true
-    },
-    {
-      name: 'fetch',
-      type: 'stdio',
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-fetch'],
-      enabled: false // Disabled by default until we find a stable npm package
     },
     {
       name: 'playwright',
       type: 'stdio',
       command: 'npx',
-      args: ['-y', '@playwright/mcp'],
+      args: ['-y', '@playwright/mcp@latest'],
       enabled: true
     },
     {
@@ -94,8 +88,9 @@ function getDefaultMCPServers(): MCPServerConfig[] {
       name: 'sqlite',
       type: 'stdio',
       command: 'npx',
-      args: ['-y', 'mcp-server-sqlite', path.join(layout.data, 'mcp.db')],
-      enabled: true
+      args: ['-y', '@modelcontextprotocol/server-sqlite', path.join(layout.data, 'mcp.db')],
+      // Disabled by default — requires native sqlite3 bindings that may not be present
+      enabled: false
     },
     {
       name: 'postgres',
@@ -109,27 +104,30 @@ function getDefaultMCPServers(): MCPServerConfig[] {
       name: 'docker',
       type: 'stdio',
       command: 'npx',
-      args: ['-y', '@thelord/mcp-server-docker-npx'],
-      enabled: true
+      args: ['-y', '@modelcontextprotocol/server-docker'],
+      // Disabled by default — only useful when Docker daemon is running
+      enabled: false
     },
     {
       name: 'kubernetes',
       type: 'stdio',
       command: 'npx',
-      args: ['-y', 'mcp-server-kubernetes'],
-      enabled: true
+      args: ['-y', '@modelcontextprotocol/server-kubernetes'],
+      // Disabled by default — requires kubectl configured
+      enabled: false
     },
     {
       name: 'obsidian',
       type: 'stdio',
       command: 'npx',
-      args: ['-y', 'obsidian-mcp-server'],
-      enabled: true
+      args: ['-y', '@modelcontextprotocol/server-obsidian'],
+      // Disabled by default — requires Obsidian vault path configuration
+      enabled: false
     }
   ];
 }
 
-async function loadMCPConfig(): Promise<MCPConfig> {
+export async function loadMCPConfig(): Promise<MCPConfig> {
   const layout = workspaceLayout();
   let config: MCPConfig = { servers: [] };
 
@@ -142,7 +140,7 @@ async function loadMCPConfig(): Promise<MCPConfig> {
     }
   }
 
-  // Merge with defaults
+  // Merge with defaults — user config takes precedence; missing defaults are added
   const defaults = getDefaultMCPServers();
   for (const def of defaults) {
     if (!config.servers.some(s => s.name === def.name)) {
@@ -153,7 +151,7 @@ async function loadMCPConfig(): Promise<MCPConfig> {
   return config;
 }
 
-async function saveMCPConfig(config: MCPConfig) {
+export async function saveMCPConfig(config: MCPConfig) {
   const layout = workspaceLayout();
   const dir = path.dirname(layout.mcpConfig);
   if (!existsSync(dir)) {
@@ -162,12 +160,15 @@ async function saveMCPConfig(config: MCPConfig) {
   await writeFile(layout.mcpConfig, JSON.stringify(config, null, 2));
 }
 
-export async function createMCPTools(): Promise<Record<string, any>> {
+export async function createMCPTools(options?: { onlyServers?: string[]; excludeServers?: string[] }): Promise<Record<string, any>> {
+  const layout = workspaceLayout();
   const config = await loadMCPConfig();
   const allTools: Record<string, any> = {};
 
   for (const server of config.servers) {
     if (!server.enabled) continue;
+    if (options?.onlyServers && !options.onlyServers.includes(server.name)) continue;
+    if (options?.excludeServers && options.excludeServers.includes(server.name)) continue;
 
     // Reuse existing client and tools if already active
     if (activeClients.has(server.name)) {
@@ -176,14 +177,39 @@ export async function createMCPTools(): Promise<Record<string, any>> {
     }
 
     try {
-      emitProgress({ type: 'tool:start', label: `Initializing MCP server: ${server.name}` });
-
       let client;
       if (server.type === 'stdio') {
+        let cmd = server.command!;
+        let args = server.args || [];
+
+        if (process.platform === 'win32') {
+          // On Windows, executing batch files (like npx.cmd) with shell:false (which is hardcoded inside StdioMCPTransport)
+          // throws "spawn EINVAL" due to CVE-2024-27980 command injection protection.
+          // By wrapping it in 'cmd.exe /c npx ...', we execute via the command processor shell, avoiding EINVAL.
+          if (cmd === 'npx' || cmd === 'npx.cmd') {
+            cmd = 'cmd.exe';
+            args = ['/c', 'npx', ...args];
+          }
+        }
+
+        // Redirect stderr to a log file to keep the terminal clean
+        let stderrOption: any = 'ignore';
+        try {
+          const logDir = layout.logs;
+          if (!existsSync(logDir)) {
+            await mkdir(logDir, { recursive: true });
+          }
+          const logFile = path.join(logDir, `mcp-${server.name}.log`);
+          stderrOption = openSync(logFile, 'a');
+        } catch (err) {
+          stderrOption = 'ignore';
+        }
+
         const transport = new Experimental_StdioMCPTransport({
-          command: server.command!,
-          args: server.args || [],
+          command: cmd,
+          args,
           env: { ...process.env, ...server.env } as Record<string, string>,
+          stderr: stderrOption,
         });
         client = await createMCPClient({ transport });
       } else if (server.type === 'http' || server.type === 'sse') {
@@ -200,11 +226,10 @@ export async function createMCPTools(): Promise<Record<string, any>> {
         const serverTools = await client.tools();
         activeClients.set(server.name, { client, tools: serverTools });
         Object.assign(allTools, serverTools);
-        emitProgress({ type: 'tool:end', label: `MCP server ready: ${server.name}`, detail: `${Object.keys(serverTools).length} tools loaded` });
       }
     } catch (error) {
-      emitProgress({ type: 'tool:error', label: `MCP server failed: ${server.name}`, detail: String(error) });
-      console.error(`MCP server ${server.name} error:`, error);
+      const detail = error instanceof Error ? error.message : String(error);
+      emitProgress({ type: 'tool:error', label: `MCP server failed: ${server.name}`, detail });
     }
   }
 

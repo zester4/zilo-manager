@@ -1,19 +1,73 @@
 import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, copyFile } from 'node:fs/promises';
+import path from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import chalk from 'chalk';
+import { gateway } from 'ai';
 import { printPanel, printZilMateBanner } from './format.js';
 import { runCameraDoctor } from '../tools/desktop.tool.js';
 import { initWorkspace } from '../workspace/init.js';
-import { workspaceLayout } from '../workspace/paths.js';
-import { startCloudflareQuickTunnel } from './tunnel.js';
+import { workspaceLayout, resolveWorkspaceRoot } from '../workspace/paths.js';
+import { startCloudflareQuickTunnel, isCloudflaredAvailable, ensureCloudflared } from './tunnel.js';
 import { startJobWebhookServer } from '../jobs/webhook-server.js';
 
 const execFileAsync = promisify(execFile);
+
+// Live Verification Helpers
+async function verifyGatewayKey(key: string): Promise<boolean> {
+  const originalKey = process.env.AI_GATEWAY_API_KEY;
+  try {
+    process.env.AI_GATEWAY_API_KEY = key;
+    await gateway.getAvailableModels();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    process.env.AI_GATEWAY_API_KEY = originalKey;
+  }
+}
+
+async function verifyTavilyKey(key: string): Promise<boolean> {
+  try {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: key, query: 'ping', max_results: 1 }),
+    });
+    return res.status === 200;
+  } catch {
+    return false;
+  }
+}
+
+async function verifyDeepgramKey(key: string): Promise<boolean> {
+  try {
+    const res = await fetch('https://api.deepgram.com/v1/projects', {
+      headers: { 'Authorization': `Token ${key}` },
+    });
+    return res.status === 200;
+  } catch {
+    return false;
+  }
+}
+
+async function verifyRedisCredentials(url: string, token: string): Promise<boolean> {
+  try {
+    const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+    const res = await fetch(`${cleanUrl}/ping`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (res.status !== 200) return false;
+    const data = await res.json() as { result?: string };
+    return data.result === 'PONG';
+  } catch {
+    return false;
+  }
+}
 
 type SetupOptions = {
   path?: string;
@@ -93,17 +147,71 @@ function formatEnvValue(value: string) {
   return JSON.stringify(value);
 }
 
-async function askRequiredSecret(rl: readline.Interface, prompt: string) {
-  while (true) {
-    const value = await rl.question(prompt);
-    if (value.trim()) return value.trim();
-    console.log(chalk.yellow('This value is required.'));
+// Secure keypress-based masking prompter
+async function askSecret(rl: readline.Interface, prompt: string, required = false): Promise<string> {
+  if (!process.stdin.isTTY) {
+    while (true) {
+      const val = (await rl.question(prompt)).trim();
+      if (val || !required) return val;
+      console.log(chalk.yellow('This value is required.'));
+    }
   }
+
+  return new Promise<string>((resolve) => {
+    process.stdout.write(prompt);
+    const wasRaw = process.stdin.isRaw;
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+
+    let value = '';
+
+    const onData = (key: string | Buffer) => {
+      const char = key.toString('utf8');
+
+      for (let i = 0; i < char.length; i++) {
+        const c = char[i]!;
+        if (c === '\r' || c === '\n') {
+          process.stdin.setRawMode(wasRaw);
+          process.stdin.removeListener('data', onData);
+          process.stdout.write('\n');
+          const trimmed = value.trim();
+          if (required && !trimmed) {
+            process.stdin.setRawMode(true);
+            process.stdin.on('data', onData);
+            process.stdout.write(chalk.yellow('This value is required.\n') + prompt);
+            value = '';
+          } else {
+            resolve(trimmed);
+          }
+          return;
+        } else if (c === '\u0003') { // Ctrl+C
+          process.stdin.setRawMode(wasRaw);
+          process.stdin.removeListener('data', onData);
+          process.stdout.write('\n');
+          process.exit(130);
+        } else if (c === '\b' || c === '\x7f') { // Backspace
+          if (value.length > 0) {
+            value = value.slice(0, -1);
+            process.stdout.write('\b \b');
+          }
+        } else if (c >= ' ') {
+          value += c;
+          process.stdout.write('*');
+        }
+      }
+    };
+
+    process.stdin.on('data', onData);
+  });
+}
+
+async function askRequiredSecret(rl: readline.Interface, prompt: string) {
+  return askSecret(rl, prompt, true);
 }
 
 async function askOptionalSecret(rl: readline.Interface, prompt: string) {
-  const value = await rl.question(prompt);
-  return value.trim();
+  return askSecret(rl, prompt, false);
 }
 
 async function askYesNo(rl: readline.Interface, question: string, fallback: boolean) {
@@ -129,6 +237,16 @@ async function readEnvValues(path: string) {
 }
 
 async function writeEnvValues(path: string, values: Map<string, string>, options: { merge?: boolean; touchedKeys?: Set<string> } = {}) {
+  if (existsSync(path)) {
+    try {
+      const backupPath = `${path}.bak`;
+      await copyFile(path, backupPath);
+      console.log(chalk.gray(`Created backup: ${backupPath}`));
+    } catch (error) {
+      console.log(chalk.yellow(`Warning: Could not create backup file: ${error instanceof Error ? error.message : String(error)}`));
+    }
+  }
+
   let content = '';
   if (options.merge && existsSync(path)) {
     const existing = await readFile(path, 'utf8');
@@ -182,8 +300,14 @@ async function installCameraDependency() {
   return false;
 }
 
+function resolveEnvPath(passedPath?: string): string {
+  if (passedPath) return passedPath;
+  if (existsSync('.env')) return '.env';
+  return path.join(resolveWorkspaceRoot(), '.env');
+}
+
 export async function runSetup(options: SetupOptions = {}) {
-  const envPath = options.path || '.env';
+  const envPath = resolveEnvPath(options.path);
   const existing = await readEnvValues(envPath);
   const rl = readline.createInterface({ input, output });
   const mergeMode = options.force ? false : existing.size > 0;
@@ -205,8 +329,25 @@ export async function runSetup(options: SetupOptions = {}) {
     } else if (!values.has('AI_GATEWAY_API_KEY') || options.force) {
       console.log(chalk.cyan('\nAI Gateway'));
       console.log(chalk.gray('ZilMate uses the Vercel AI Gateway for LLM access. You need an API key from the gateway.'));
-      values.set('AI_GATEWAY_API_KEY', await askRequiredSecret(rl, 'AI_GATEWAY_API_KEY: '));
-      touchedKeys.add('AI_GATEWAY_API_KEY');
+      while (true) {
+        const key = await askRequiredSecret(rl, 'AI_GATEWAY_API_KEY: ');
+        process.stdout.write(chalk.gray('Verifying key... '));
+        const ok = await verifyGatewayKey(key);
+        if (ok) {
+          console.log(chalk.green('✅ Verified!'));
+          values.set('AI_GATEWAY_API_KEY', key);
+          touchedKeys.add('AI_GATEWAY_API_KEY');
+          break;
+        } else {
+          console.log(chalk.red('❌ Verification failed.'));
+          const retry = await askYesNo(rl, 'The key appears to be invalid or there was a network error. Re-enter?', true);
+          if (!retry) {
+            values.set('AI_GATEWAY_API_KEY', key);
+            touchedKeys.add('AI_GATEWAY_API_KEY');
+            break;
+          }
+        }
+      }
     }
 
     if (options.composioKey) {
@@ -246,8 +387,25 @@ export async function runSetup(options: SetupOptions = {}) {
         'Configure Tavily now?',
         true,
       )) {
-        values.set('TAVILY_API_KEY', await askRequiredSecret(rl, 'TAVILY_API_KEY: '));
-        touchedKeys.add('TAVILY_API_KEY');
+        while (true) {
+          const key = await askRequiredSecret(rl, 'TAVILY_API_KEY: ');
+          process.stdout.write(chalk.gray('Verifying Tavily key... '));
+          const ok = await verifyTavilyKey(key);
+          if (ok) {
+            console.log(chalk.green('✅ Verified!'));
+            values.set('TAVILY_API_KEY', key);
+            touchedKeys.add('TAVILY_API_KEY');
+            break;
+          } else {
+            console.log(chalk.red('❌ Verification failed.'));
+            const retry = await askYesNo(rl, 'The key appears to be invalid or there was a network error. Re-enter?', true);
+            if (!retry) {
+              values.set('TAVILY_API_KEY', key);
+              touchedKeys.add('TAVILY_API_KEY');
+              break;
+            }
+          }
+        }
       }
     }
 
@@ -264,10 +422,30 @@ export async function runSetup(options: SetupOptions = {}) {
         'Configure Upstash Redis now?',
         false,
       )) {
-        values.set('UPSTASH_REDIS_REST_URL', await askRequiredSecret(rl, 'UPSTASH_REDIS_REST_URL: '));
-        values.set('UPSTASH_REDIS_REST_TOKEN', await askRequiredSecret(rl, 'UPSTASH_REDIS_REST_TOKEN: '));
-        touchedKeys.add('UPSTASH_REDIS_REST_URL');
-        touchedKeys.add('UPSTASH_REDIS_REST_TOKEN');
+        while (true) {
+          const redisUrl = await askRequiredSecret(rl, 'UPSTASH_REDIS_REST_URL: ');
+          const redisToken = await askRequiredSecret(rl, 'UPSTASH_REDIS_REST_TOKEN: ');
+          process.stdout.write(chalk.gray('Verifying Redis REST connection... '));
+          const ok = await verifyRedisCredentials(redisUrl, redisToken);
+          if (ok) {
+            console.log(chalk.green('✅ Connected successfully!'));
+            values.set('UPSTASH_REDIS_REST_URL', redisUrl);
+            values.set('UPSTASH_REDIS_REST_TOKEN', redisToken);
+            touchedKeys.add('UPSTASH_REDIS_REST_URL');
+            touchedKeys.add('UPSTASH_REDIS_REST_TOKEN');
+            break;
+          } else {
+            console.log(chalk.red('❌ Connection failed.'));
+            const retry = await askYesNo(rl, 'Connection failed. Re-enter Redis credentials?', true);
+            if (!retry) {
+              values.set('UPSTASH_REDIS_REST_URL', redisUrl);
+              values.set('UPSTASH_REDIS_REST_TOKEN', redisToken);
+              touchedKeys.add('UPSTASH_REDIS_REST_URL');
+              touchedKeys.add('UPSTASH_REDIS_REST_TOKEN');
+              break;
+            }
+          }
+        }
       }
     }
 
@@ -350,8 +528,25 @@ export async function runSetup(options: SetupOptions = {}) {
         'Configure Deepgram voice now?',
         false,
       )) {
-        values.set('DEEPGRAM_API_KEY', await askRequiredSecret(rl, 'DEEPGRAM_API_KEY: '));
-        touchedKeys.add('DEEPGRAM_API_KEY');
+        while (true) {
+          const key = await askRequiredSecret(rl, 'DEEPGRAM_API_KEY: ');
+          process.stdout.write(chalk.gray('Verifying Deepgram key... '));
+          const ok = await verifyDeepgramKey(key);
+          if (ok) {
+            console.log(chalk.green('✅ Verified!'));
+            values.set('DEEPGRAM_API_KEY', key);
+            touchedKeys.add('DEEPGRAM_API_KEY');
+            break;
+          } else {
+            console.log(chalk.red('❌ Verification failed.'));
+            const retry = await askYesNo(rl, 'The key appears to be invalid or there was a network error. Re-enter?', true);
+            if (!retry) {
+              values.set('DEEPGRAM_API_KEY', key);
+              touchedKeys.add('DEEPGRAM_API_KEY');
+              break;
+            }
+          }
+        }
       }
     }
 
@@ -478,6 +673,31 @@ export async function runSetup(options: SetupOptions = {}) {
       if (!(await commandExists('ffmpeg'))) await installCameraDependency();
     }
 
+    const installCloudflareDeps = options.installCloudflareDeps === undefined ? undefined : normalizeBooleanOption(options.installCloudflareDeps);
+    if (!options.yes && installCloudflareDeps === undefined) {
+      console.log(chalk.cyan('\nCloudflare Tunnel'));
+      console.log(chalk.gray('For background jobs, an optional Cloudflare Quick Tunnel can route Upstash QStash webhook requests to your local computer. This needs cloudflared.'));
+      const hasCloudflared = await isCloudflaredAvailable();
+      if (hasCloudflared) {
+        console.log(chalk.green('cloudflared is already available.'));
+      } else if (await askYesNo(rl, 'cloudflared is missing. Download/install Cloudflare tunnel automatically?', false)) {
+        try {
+          await ensureCloudflared();
+        } catch (error) {
+          console.log(chalk.yellow(error instanceof Error ? error.message : String(error)));
+          console.log(chalk.gray('Setup will continue. You can install cloudflared later.'));
+        }
+      }
+    } else if (installCloudflareDeps) {
+      if (!(await isCloudflaredAvailable())) {
+        try {
+          await ensureCloudflared();
+        } catch (error) {
+          console.log(chalk.yellow(`Could not auto-install cloudflared: ${error instanceof Error ? error.message : String(error)}`));
+        }
+      }
+    }
+
     await writeEnvValues(envPath, values, { merge: mergeMode, touchedKeys });
     console.log(chalk.green(`Saved ${envPath}.`));
     printPanel('Setup summary', [
@@ -492,7 +712,7 @@ export async function runSetup(options: SetupOptions = {}) {
       ['Voice', values.get('ZILMATE_VOICE_ENABLED') === 'true' ? values.get('DEEPGRAM_API_KEY') ? 'enabled' : 'enabled, missing Deepgram key' : 'disabled'],
       ['Chat', values.get('CHAT_INTEGRATION_ENABLED') === 'true' ? 'enabled' : 'disabled'],
       ['Camera', await commandExists('ffmpeg') ? 'ready' : 'needs ffmpeg'],
-      ['Tunnel', await commandExists('cloudflared') ? 'ready' : 'needs cloudflared'],
+      ['Tunnel', await isCloudflaredAvailable() ? 'ready' : 'needs cloudflared'],
     ]);
     console.log(chalk.gray('\nNext steps:'));
     console.log(chalk.gray('  zilmate ping'));
@@ -514,7 +734,7 @@ export async function runSetup(options: SetupOptions = {}) {
 }
 
 export async function runVoiceSetup(options: Pick<SetupOptions, 'path' | 'force' | 'deepgramApiKey' | 'voiceListenModel' | 'voiceTtsModel' | 'voiceLanguage'> = {}) {
-  const envPath = options.path || '.env';
+  const envPath = resolveEnvPath(options.path);
   const existing = await readEnvValues(envPath);
   const rl = readline.createInterface({ input, output });
 
@@ -541,9 +761,43 @@ export async function runVoiceSetup(options: Pick<SetupOptions, 'path' | 'force'
       values.set('DEEPGRAM_API_KEY', options.deepgramApiKey);
     } else if (currentKey) {
       const replace = await askYesNo(rl, 'DEEPGRAM_API_KEY already exists. Replace it?', false);
-      if (replace) values.set('DEEPGRAM_API_KEY', await askRequiredSecret(rl, 'DEEPGRAM_API_KEY: '));
+      if (replace) {
+        while (true) {
+          const key = await askRequiredSecret(rl, 'DEEPGRAM_API_KEY: ');
+          process.stdout.write(chalk.gray('Verifying Deepgram key... '));
+          const ok = await verifyDeepgramKey(key);
+          if (ok) {
+            console.log(chalk.green('✅ Verified!'));
+            values.set('DEEPGRAM_API_KEY', key);
+            break;
+          } else {
+            console.log(chalk.red('❌ Verification failed.'));
+            const retry = await askYesNo(rl, 'The key appears to be invalid or there was a network error. Re-enter?', true);
+            if (!retry) {
+              values.set('DEEPGRAM_API_KEY', key);
+              break;
+            }
+          }
+        }
+      }
     } else {
-      values.set('DEEPGRAM_API_KEY', await askRequiredSecret(rl, 'DEEPGRAM_API_KEY: '));
+      while (true) {
+        const key = await askRequiredSecret(rl, 'DEEPGRAM_API_KEY: ');
+        process.stdout.write(chalk.gray('Verifying Deepgram key... '));
+        const ok = await verifyDeepgramKey(key);
+        if (ok) {
+          console.log(chalk.green('✅ Verified!'));
+          values.set('DEEPGRAM_API_KEY', key);
+          break;
+        } else {
+          console.log(chalk.red('❌ Verification failed.'));
+          const retry = await askYesNo(rl, 'The key appears to be invalid or there was a network error. Re-enter?', true);
+          if (!retry) {
+            values.set('DEEPGRAM_API_KEY', key);
+            break;
+          }
+        }
+      }
     }
 
     const currentListenModel = options.voiceListenModel ?? values.get('ZILMATE_VOICE_LISTEN_MODEL') ?? 'flux-general-en';
@@ -580,7 +834,7 @@ export async function runVoiceSetup(options: Pick<SetupOptions, 'path' | 'force'
 }
 
 export async function setVoiceEnabled(enabled: boolean, options: Pick<SetupOptions, 'path'> = {}) {
-  const envPath = options.path || '.env';
+  const envPath = resolveEnvPath(options.path);
   const values = await readEnvValues(envPath);
   values.set('ZILMATE_VOICE_ENABLED', enabled ? 'true' : 'false');
   if (enabled) {
@@ -600,7 +854,7 @@ export async function setVoiceEnabled(enabled: boolean, options: Pick<SetupOptio
 }
 
 export async function runChatSetup(options: Pick<SetupOptions, 'path' | 'force' | 'slackBotToken' | 'slackSigningSecret' | 'telegramBotToken' | 'imessageEnabled' | 'imessageLocal'> = {}) {
-  const envPath = options.path || '.env';
+  const envPath = resolveEnvPath(options.path);
   const existing = await readEnvValues(envPath);
   const rl = readline.createInterface({ input, output });
 

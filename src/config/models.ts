@@ -1,5 +1,21 @@
-import { gateway } from 'ai';
+import { gateway, createGateway } from 'ai';
+import { fetch as undiciFetch, Agent } from 'undici';
 import { env, type ImageProvider } from './env.js';
+
+// Set up global default provider with 15-minute connection and payload timeouts
+(globalThis as any).AI_SDK_DEFAULT_PROVIDER = createGateway({
+  fetch: (url, init) =>
+    (undiciFetch as any)(url as any, {
+      ...init,
+      dispatcher: new Agent({
+        headersTimeout: 15 * 60 * 1000,
+        bodyTimeout: 15 * 60 * 1000,
+        connect: {
+          timeout: 15 * 60 * 1000, // 15 minutes connection timeout
+        }
+      }),
+    }),
+});
 
 export type ModelRegistry = {
   manager: string;

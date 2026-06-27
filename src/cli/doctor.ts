@@ -1,7 +1,9 @@
 import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { constants, existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import chalk from 'chalk';
 import { env, hasComposio, hasDeepgram, hasGatewayAuth, hasQStash, hasRedis, hasChatIntegration } from '../config/env.js';
 import { getModelAvailability, models } from '../config/models.js';
 import { getComposioStatus } from '../tools/composio.tool.js';
@@ -13,6 +15,7 @@ import { cloudflareTunnelDoctor } from './tunnel.js';
 import { skillsRegistryDoctor } from '../skills/registry.js';
 import { checkDependency } from '../observability/doctor.js';
 import { mcpManagementTools } from '../tools/mcp.tool.js';
+import { confirmPrompt } from './prompt.js';
 
 export type DoctorStatus = 'pass' | 'warn' | 'fail';
 
@@ -85,7 +88,7 @@ export async function getResolvedConfigSummary() {
   };
 }
 
-export async function runDoctor(options: { live?: boolean; sessionId?: string } = {}) {
+export async function runDoctor(options: { live?: boolean; sessionId?: string; interactive?: boolean } = {}) {
   const checks: DoctorCheck[] = [];
   const major = Number(process.versions.node.split('.')[0] || '0');
   const version = await packageVersion();
@@ -201,14 +204,40 @@ export async function runDoctor(options: { live?: boolean; sessionId?: string } 
     detail: 'PDF + slide deck generation available (pdfkit, pptxgenjs)',
   });
 
-  const hasPlaywright = await checkDependency('npx playwright --version').catch(() => false);
+  let hasPlaywright = await checkDependency('npx playwright --version').catch(() => false);
+  if (!hasPlaywright && options.interactive && process.stdin.isTTY) {
+    const confirm = await confirmPrompt('Playwright is missing. Install now?');
+    if (confirm) {
+      try {
+        console.log('Installing Playwright browser binaries...');
+        execSync('npx playwright install', { stdio: 'inherit' });
+        hasPlaywright = await checkDependency('npx playwright --version').catch(() => false);
+      } catch (e) {
+        console.log(chalk.red(`Failed to install Playwright: ${e instanceof Error ? e.message : String(e)}`));
+      }
+    }
+  }
+
   checks.push({
     name: 'Browser Automation',
     status: hasPlaywright ? 'pass' : 'warn',
     detail: hasPlaywright ? 'Playwright is available' : 'Run: npx playwright install',
   });
 
-  const hasRembg = await checkDependency('rembg --version').catch(() => false);
+  let hasRembg = await checkDependency('rembg --version').catch(() => false);
+  if (!hasRembg && options.interactive && process.stdin.isTTY) {
+    const confirm = await confirmPrompt('rembg is missing. Install now?');
+    if (confirm) {
+      try {
+        console.log('Installing rembg python package...');
+        execSync('pip install rembg', { stdio: 'inherit' });
+        hasRembg = await checkDependency('rembg --version').catch(() => false);
+      } catch (e) {
+        console.log(chalk.red(`Failed to install rembg: ${e instanceof Error ? e.message : String(e)}`));
+      }
+    }
+  }
+
   checks.push({
     name: 'Image Intelligence',
     status: hasRembg ? 'pass' : 'warn',

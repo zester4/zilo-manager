@@ -33,7 +33,7 @@ export async function loadTurns(sessionId: string) {
 
 export async function saveTurns(sessionId: string, turns: ChatTurn[]) {
   const redis = getRedis();
-  const trimmed = turns.slice(-20);
+  const trimmed = turns.slice(-10);
   if (redis) {
     await redis.set(`zilo-manager:turns:${sessionId}`, trimmed, { ex: historyTtlSeconds });
     return;

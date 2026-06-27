@@ -1,4 +1,4 @@
-﻿import readline from 'node:readline/promises';
+import readline from 'node:readline/promises';
 import { existsSync } from 'node:fs';
 import { readFile, appendFile } from 'node:fs/promises';
 import { stdin as input, stdout as output } from 'node:process';
@@ -186,7 +186,7 @@ export async function startInteractiveChat(sessionId = 'default') {
       if (message === '/mcp' || message.startsWith('/mcp ')) {
         const parts = message.split(' ');
         const sub = parts[1];
-        const { mcpManagementTools, closeMCPClients } = await import('../tools/mcp.tool.js');
+        const { mcpManagementTools, closeMCPClients, loadMCPConfig, saveMCPConfig, getDefaultMCPServers } = await import('../tools/mcp.tool.js');
 
         if (!sub || sub === 'list') {
           const result = await (mcpManagementTools.listMCPServers as any).execute({});
@@ -198,6 +198,24 @@ export async function startInteractiveChat(sessionId = 'default') {
         } else if (sub === 'restart') {
           await closeMCPClients();
           console.log(theme.ok('MCP clients closed. They will restart on the next message.'));
+        } else if (sub === 'off') {
+          const config = await loadMCPConfig();
+          for (const s of config.servers) {
+            s.enabled = false;
+          }
+          await saveMCPConfig(config);
+          await closeMCPClients();
+          console.log(theme.ok('All MCP servers disabled. This setting is persistent.'));
+        } else if (sub === 'on') {
+          const config = await loadMCPConfig();
+          const defaults = getDefaultMCPServers();
+          for (const s of config.servers) {
+            const def = defaults.find(d => d.name === s.name);
+            s.enabled = def ? def.enabled : true;
+          }
+          await saveMCPConfig(config);
+          await closeMCPClients();
+          console.log(theme.ok('Default MCP servers enabled. They will restart on the next message.'));
         } else if (sub === 'add') {
           console.log(theme.muted('To add an MCP server, use the interactive "zilmate setup" or use the addMCPServer tool via agent.'));
           console.log(theme.muted('Format: /mcp add <name> <type> <command/url> [args...]'));
@@ -213,6 +231,8 @@ export async function startInteractiveChat(sessionId = 'default') {
         } else {
           console.log(theme.textBright('MCP Commands'));
           console.log(`  ${theme.brand('/mcp list')}      List servers`);
+          console.log(`  ${theme.brand('/mcp on')}        Enable all default servers`);
+          console.log(`  ${theme.brand('/mcp off')}       Disable all servers`);
           console.log(`  ${theme.brand('/mcp remove')}    Remove a server`);
           console.log(`  ${theme.brand('/mcp restart')}   Close and reload clients`);
         }

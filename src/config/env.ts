@@ -1,9 +1,29 @@
-﻿import 'dotenv/config';
 import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { resolveWorkspaceRoot } from '../workspace/paths.js';
 
+// Load default .env from current directory first (non-overriding)
+loadDotenv();
+
+// Resolve workspace root and load its env files as a global fallback
+const workspaceRoot = resolveWorkspaceRoot();
+const workspaceEnvPath = path.join(workspaceRoot, '.env');
+const workspaceEnvLocalPath = path.join(workspaceRoot, '.env.local');
+
+if (existsSync(workspaceEnvPath)) {
+  loadDotenv({ path: workspaceEnvPath, override: true });
+}
+if (existsSync(workspaceEnvLocalPath)) {
+  loadDotenv({ path: workspaceEnvLocalPath, override: true });
+}
+
+// Load current working directory .env and .env.local to ensure local overrides take precedence
+if (existsSync('.env')) {
+  loadDotenv({ path: '.env', override: true });
+}
 if (existsSync('.env.local')) {
-  loadDotenv({ path: '.env.local', override: false });
+  loadDotenv({ path: '.env.local', override: true });
 }
 
 export type ImageProvider = 'openai' | 'gemini';

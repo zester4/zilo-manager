@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 import { closeMCPClients } from './tools/mcp.tool.js';
 import { Command } from 'commander';
 import { generateText } from 'ai';
@@ -60,7 +60,7 @@ const program = new Command();
 program
   .name('zilmate')
   .description('ZilMate Agent')
-  .version('1.8.1');
+  .version('1.9.1');
 
 program
   .command('welcome')
@@ -117,7 +117,7 @@ program
 
 program
   .command('setup')
-  .option('-p, --path <file>', 'environment file to create or update', '.env')
+  .option('-p, --path <file>', 'environment file to create or update')
   .option('-f, --force', 'skip the first overwrite confirmation when the env file exists')
   .option('-y, --yes', 'noninteractive mode; write defaults plus provided keys')
   .option('--ai-gateway-key <key>', 'AI Gateway API key')
@@ -192,7 +192,7 @@ const voice = program
 
 voice
   .command('setup')
-  .option('-p, --path <file>', 'environment file to create or update', '.env')
+  .option('-p, --path <file>', 'environment file to create or update')
   .option('-f, --force', 'skip the first update confirmation when the env file exists')
   .option('--deepgram-key <key>', 'Deepgram API key for realtime voice')
   .option('--voice-listen-model <model>', 'Deepgram listen model, e.g. flux-general-en or flux-general-multi')
@@ -217,7 +217,7 @@ voice
 
 voice
   .command('enable')
-  .option('-p, --path <file>', 'environment file to update', '.env')
+  .option('-p, --path <file>', 'environment file to update')
   .description('Enable realtime voice without opening .env')
   .action(async (options: { path: string }) => {
     try {
@@ -230,7 +230,7 @@ voice
 
 voice
   .command('disable')
-  .option('-p, --path <file>', 'environment file to update', '.env')
+  .option('-p, --path <file>', 'environment file to update')
   .description('Disable realtime voice without opening .env')
   .action(async (options: { path: string }) => {
     try {
@@ -558,10 +558,15 @@ program
   .option('--live', 'also run live Gateway and Composio checks')
   .option('-s, --session <id>', 'Composio/ZilMate session id for live checks', 'default')
   .option('--json', 'print JSON output')
+  .option('--no-interactive', 'disable interactive dependency installers')
   .description('Check local ZilMate config, keys, memory, Node, and optional live integrations')
-  .action(async (options: { live?: boolean; session: string; json?: boolean }) => {
+  .action(async (options: { live?: boolean; session: string; json?: boolean; interactive?: boolean }) => {
     try {
-      const checks = await runDoctor({ live: Boolean(options.live), sessionId: options.session });
+      const checks = await runDoctor({
+        live: Boolean(options.live),
+        sessionId: options.session,
+        interactive: options.interactive !== false && !options.json && process.stdin.isTTY,
+      });
       if (options.json) {
         printJson(checks);
       } else {
@@ -582,10 +587,15 @@ envCommand
   .option('--live', 'also run live Gateway and Composio checks')
   .option('-s, --session <id>', 'Composio/ZilMate session id for live checks', 'default')
   .option('--json', 'print JSON output')
+  .option('--no-interactive', 'disable interactive dependency installers')
   .description('Alias for zilmate doctor focused on environment readiness')
-  .action(async (options: { live?: boolean; session: string; json?: boolean }) => {
+  .action(async (options: { live?: boolean; session: string; json?: boolean; interactive?: boolean }) => {
     try {
-      const checks = await runDoctor({ live: Boolean(options.live), sessionId: options.session });
+      const checks = await runDoctor({
+        live: Boolean(options.live),
+        sessionId: options.session,
+        interactive: options.interactive !== false && !options.json && process.stdin.isTTY,
+      });
       if (options.json) {
         printJson(checks);
       } else {
@@ -865,7 +875,7 @@ const chat = program
 
 chat
   .command('setup')
-  .option('-p, --path <file>', 'environment file to update', '.env')
+  .option('-p, --path <file>', 'environment file to update')
   .option('-f, --force', 'skip overwrite confirmations')
   .option('--slack-bot-token <token>', 'Slack bot token')
   .option('--slack-signing-secret <secret>', 'Slack signing secret')

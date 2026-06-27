@@ -126,7 +126,7 @@ export const setupAssistantTools = {
   }),
 
   initWorkspaceFromAgent: tool({
-    description: 'Create the ZilMate workspace folder (Downloads/ZilMate or ~/ZilMate) with notebook, skills, outputs, and logs.',
+    description: 'Create the ZilMate workspace folder (~/ZilMate) with notebook, skills, outputs, and logs.',
     inputSchema: z.object({}),
     execute: async () => {
       const layout = await initWorkspace();

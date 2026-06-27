@@ -4,11 +4,26 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
 
-const root = process.env.ZILMATE_WORKSPACE?.trim()
+const candidates = [
+  path.join(homedir(), 'ZilMate'),
+  path.join(homedir(), 'Downloads', 'ZilMate'),
+];
+
+let root = process.env.ZILMATE_WORKSPACE?.trim()
   ? path.resolve(process.env.ZILMATE_WORKSPACE.trim())
-  : process.platform === 'win32' || process.platform === 'darwin'
-    ? path.join(homedir(), 'Downloads', 'ZilMate')
-    : path.join(homedir(), 'ZilMate');
+  : null;
+
+if (!root) {
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      root = candidate;
+      break;
+    }
+  }
+}
+if (!root) {
+  root = path.join(homedir(), 'ZilMate');
+}
 
 const dirs = [
   root,

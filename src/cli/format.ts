@@ -3,8 +3,7 @@ import logUpdate from 'log-update';
 import { marked } from 'marked';
 import type { Tokens } from 'marked';
 import type { ProgressEvent } from '../runtime/progress.js';
-import { createActivitySpinner, type ActivitySpinner } from './spinner.js';
-import { getDeptTheme, agentCard, toolBadge, theme as zilTheme } from './theme.js';
+import { getDeptTheme, toolBadge, wrapText, theme as zilTheme, boxLine } from './theme.js';
 
 const maxWidth = () => Math.min(process.stdout.columns || 96, 110);
 const divider = (color = chalk.gray) => color('─'.repeat(Math.min(maxWidth(), 88)));
@@ -182,19 +181,38 @@ function colorCell(value: string) {
 
 function tableWidths(headers: string[], rows: string[][]) {
   const available = Math.max(40, maxWidth() - headers.length * 3 - 1);
-  const minimums = headers.map((header) => Math.min(Math.max(header.length, 6), 12));
+  const minimums = headers.map((header) => Math.min(Math.max(header.length, 4), 12));
   const natural = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => plain(row[index]).length)));
-  let widths = natural.map((width, index) => Math.max(minimums[index]!, Math.min(width, index === headers.length - 1 ? 52 : 22)));
-  let total = widths.reduce((sum, width) => sum + width, 0);
+  
+  const totalNatural = natural.reduce((sum, w) => sum + w, 0);
+  if (totalNatural <= available) {
+    return natural;
+  }
 
-  while (total > available) {
-    const index = widths
-      .map((width, itemIndex) => ({ width, itemIndex, min: minimums[itemIndex]! }))
-      .filter((item) => item.width > item.min)
-      .sort((a, b) => b.width - a.width)[0]?.itemIndex;
-    if (index === undefined) break;
-    widths[index] = widths[index]! - 1;
-    total -= 1;
+  let widths = [...minimums];
+  let total = widths.reduce((sum, w) => sum + w, 0);
+  if (total >= available) {
+    return widths;
+  }
+
+  let remaining = available - total;
+  while (remaining > 0) {
+    let bestIndex = -1;
+    let maxDiff = -1;
+    for (let i = 0; i < widths.length; i++) {
+      const diff = natural[i]! - widths[i]!;
+      if (diff > maxDiff) {
+        maxDiff = diff;
+        bestIndex = i;
+      }
+    }
+
+    if (bestIndex === -1 || maxDiff <= 0) {
+      break;
+    }
+
+    widths[bestIndex]! += 1;
+    remaining -= 1;
   }
 
   return widths;
@@ -271,88 +289,402 @@ export function printProgress(event: ProgressEvent) {
   printProgressWithSticky(event);
 }
 
-let activeSpinner: ActivitySpinner | undefined;
-
 export function createProgressPrinter() {
   return (event: ProgressEvent) => printProgressWithSticky(event);
 }
 
+// ─── Formatting helpers ───────────────────────────────────────────────────────
+export function stripAnsi(str: string): string {
+  return str.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+export function padAnsiLine(line: string, targetWidth: number): string {
+  const visibleLen = stripAnsi(line).length;
+  if (visibleLen >= targetWidth) {
+    return line;
+  }
+  return line + ' '.repeat(targetWidth - visibleLen);
+}
+
+export function renderMarkdownToBoxLines(markdown: string, width: number): string[] {
+  const cleaned = protectMachineTokens(markdown.trim());
+  if (!cleaned) return [];
+  const tokens = marked.lexer(cleaned);
+  const lines: string[] = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (!token) continue;
+
+    // Handle space tokens
+    if (token.type === 'space') {
+      if (lines.length > 0 && lines[lines.length - 1] !== '') {
+        lines.push('');
+      }
+      continue;
+    }
+
+    switch (token.type) {
+      case 'heading': {
+        const headingToken = token as Tokens.Heading;
+        const wrapped = wrapText(headingToken.text, width);
+        wrapped.forEach(line => {
+          lines.push(chalk.bold.cyan(renderInline(line)));
+        });
+        break;
+      }
+      case 'paragraph': {
+        const paragraphToken = token as Tokens.Paragraph;
+        const wrapped = wrapText(paragraphToken.text, width);
+        wrapped.forEach(line => {
+          lines.push(zilTheme.text(renderInline(line)));
+        });
+        break;
+      }
+      case 'list': {
+        const listToken = token as Tokens.List;
+        listToken.items.forEach((item, idx) => {
+          const bullet = listToken.ordered ? `${idx + 1}. ` : '• ';
+          const bulletLen = bullet.length;
+          const wrapped = wrapText(item.text, width - bulletLen);
+          if (wrapped.length > 0) {
+            lines.push(chalk.cyan(bullet) + zilTheme.text(renderInline(wrapped[0]!)));
+            for (let j = 1; j < wrapped.length; j++) {
+              lines.push(' '.repeat(bulletLen) + zilTheme.text(renderInline(wrapped[j]!)));
+            }
+          }
+        });
+        break;
+      }
+      case 'code': {
+        const codeToken = token as Tokens.Code;
+        const codeLines = codeToken.text.split('\n');
+        codeLines.forEach(line => {
+          const wrapped = wrapText(line, width - 2);
+          wrapped.forEach((wl, idx) => {
+            const prefix = idx === 0 ? '▕ ' : '  ';
+            lines.push(chalk.gray(prefix) + chalk.yellow(wl));
+          });
+        });
+        break;
+      }
+      case 'blockquote': {
+        const blockquoteToken = token as Tokens.Blockquote;
+        const wrapped = wrapText(blockquoteToken.text, width - 2);
+        wrapped.forEach(line => {
+          lines.push(chalk.gray('│ ') + chalk.italic(renderInline(line)));
+        });
+        break;
+      }
+      case 'hr': {
+        lines.push(chalk.gray('─'.repeat(width)));
+        break;
+      }
+      default: {
+        if ('raw' in token) {
+          const wrapped = wrapText(String(token.raw).trim(), width);
+          wrapped.forEach(line => {
+            lines.push(zilTheme.text(renderInline(line)));
+          });
+        }
+      }
+    }
+
+    // Add an empty line between blocks, unless it's the last block or next is space
+    if (i < tokens.length - 1 && tokens[i+1]?.type !== 'space') {
+      lines.push('');
+    }
+  }
+
+  return lines;
+}
+
+export function agentCard(agentName: string, dept: string, content: string, width = 80) {
+  const { color, icon } = getDeptTheme(dept);
+  const innerWidth = width - 4;
+  
+  // Render markdown to box lines of width innerWidth
+  const lines = renderMarkdownToBoxLines(content, innerWidth);
+
+  const header = color(`╭─ ${icon} ${agentName.toUpperCase()} ──`);
+  const visibleHeaderLen = stripAnsi(header).length;
+  const top = header + color('─'.repeat(Math.max(0, width - visibleHeaderLen - 1)) + '╮');
+
+  const result = [top];
+  for (const line of lines) {
+    const padded = padAnsiLine(line, innerWidth);
+    result.push(color('│ ') + padded + color(' │'));
+  }
+  result.push(color(`╰${'─'.repeat(width - 2)}╯`));
+  return result.join('\n');
+}
+
+// ─── Display state ────────────────────────────────────────────────────────────
+// Tracks the active specialist panel so tool calls inside it can be indented.
+interface DisplayState {
+  activeSpecialist: string | null;
+  activeDept: string | null;
+  stepCount: number;
+  toolStartTimes: Map<string, number>;
+  sessionStart: number;
+  thinkStart: number;
+}
+
+const displayState: DisplayState = {
+  activeSpecialist: null,
+  activeDept: null,
+  stepCount: 0,
+  toolStartTimes: new Map(),
+  sessionStart: Date.now(),
+  thinkStart: 0,
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmtMs(ms: number): string {
+  if (ms < 1000) return chalk.gray(`${ms}ms`);
+  return chalk.gray(`${(ms / 1000).toFixed(1)}s`);
+}
+
+function fmtElapsed(startMs: number): string {
+  return fmtMs(Date.now() - startMs);
+}
+
+/** Right-align a string to fill the terminal width, padding with spaces */
+function rightAlign(left: string, right: string, width: number): string {
+  // ANSI escape codes add invisible chars — approximate visible length by stripping them
+  const visibleLeft = left.replace(/\x1b\[[0-9;]*m/g, '');
+  const visibleRight = right.replace(/\x1b\[[0-9;]*m/g, '');
+  const gap = Math.max(1, width - visibleLeft.length - visibleRight.length);
+  return left + ' '.repeat(gap) + right;
+}
+
+function truncate(str: string, max: number): string {
+  if (!str) return '';
+  const s = str.replace(/\n/g, ' ').trim();
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+/** Indent prefix: '' for CEO-level, '  ' for COO, '    ' for specialist tools */
+function indent(): string {
+  return displayState.activeSpecialist ? '    ' : '  ';
+}
+
+// ─── Specialist panel renderers ───────────────────────────────────────────────
+function openSpecialistPanel(name: string, dept: string, detail?: string) {
+  const w = Math.min(maxWidth(), 90);
+  const { color, icon } = getDeptTheme(dept);
+  const deptLabel = `${icon} ${dept.toUpperCase()} · ${name}`;
+  const header = color(`╭─ ${deptLabel} ──`);
+  const visibleHeaderLen = stripAnsi(header).length;
+  const top = header + color('─'.repeat(Math.max(0, w - visibleHeaderLen - 1)) + '╮');
+
+  console.log('');
+  // Panel header: ╭─ 🎯 STRATEGY · Market Analyst ──────────────────────────╮
+  console.log(top);
+  if (detail) {
+    const inner = w - 4;
+    const lines = wrapText(truncate(detail, inner * 2), inner);
+    for (const line of lines.slice(0, 2)) {
+      const padded = padAnsiLine(chalk.hex('#94A3B8')(line), inner);
+      console.log(color('│ ') + padded + color(' │'));
+    }
+    console.log(color(`├${'─'.repeat(w - 2)}┤`));
+  }
+}
+
+function closeSpecialistPanel(name: string, dept: string, durationMs?: number) {
+  const w = Math.min(maxWidth(), 90);
+  const { color } = getDeptTheme(dept);
+  const timing = durationMs !== undefined ? `  ${fmtMs(durationMs)}` : '';
+  const doneLabel = chalk.green('✔ done') + timing;
+  const visibleLen = stripAnsi(doneLabel).length;
+  const pad = Math.max(0, w - visibleLen - 4);
+  console.log(color(`╰${'─'.repeat(pad)}╯`) + ' ' + doneLabel);
+  console.log('');
+}
+
+// ─── Thinking ticker state ────────────────────────────────────────────────────
+let thinkingTimer: NodeJS.Timeout | null = null;
+let thinkingFrame = 0;
+let thinkingLabel = 'Thinking';
+
+function triggerThinkingTick() {
+  const w = Math.min(maxWidth(), 90);
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const elapsed = fmtElapsed(displayState.thinkStart || Date.now());
+  const hint = chalk.gray('(Ctrl+C to interrupt)');
+  const spinner = frames[thinkingFrame % frames.length]!;
+  thinkingFrame++;
+
+  const leftText = `${zilTheme.thinking(spinner)} ${zilTheme.thinking(thinkingLabel)}`;
+  const rightText = `${hint}  ${elapsed}`;
+  
+  const innerW = w - 4;
+  const aligned = rightAlign(leftText, rightText, innerW);
+
+  const top = boxLine('top', w, zilTheme.thinking);
+  const mid = zilTheme.thinking('│ ') + aligned + zilTheme.thinking(' │');
+  const bot = boxLine('bot', w, zilTheme.thinking);
+
+  logUpdate(`${top}\n${mid}\n${bot}`);
+}
+
+function startThinkingTicker(label: string) {
+  thinkingLabel = label;
+  if (thinkingTimer) return;
+  thinkingFrame = 0;
+  thinkingTimer = setInterval(triggerThinkingTick, 80);
+  triggerThinkingTick();
+}
+
+function stopThinkingTicker() {
+  if (thinkingTimer) {
+    clearInterval(thinkingTimer);
+    thinkingTimer = null;
+  }
+}
+
+// ─── Main handler ─────────────────────────────────────────────────────────────
 function printProgressWithSticky(event: ProgressEvent) {
+  const w = Math.min(maxWidth(), 90);
+
+  // ── Thinking: live animated line via logUpdate ───────────────────────────
   if (event.type === 'thinking') {
-    const detail = event.detail ? ` ${chalk.gray(`(${event.detail})`)}` : '';
-    logUpdate(`${zilTheme.thinking('✶')} ${zilTheme.thinking(event.label || 'Thinking')}${detail} ${chalk.gray('(Ctrl+C to interrupt)')}`);
+    displayState.thinkStart = displayState.thinkStart || Date.now();
+    startThinkingTicker(event.label || 'Thinking');
     return;
   }
 
+  // ── Done: clear spinner, show total time ────────────────────────────────
   if (event.type === 'done') {
+    stopThinkingTicker();
     logUpdate.clear();
     logUpdate.done();
-    console.log(chalk.green(`✓ ${event.label}`));
+    const total = fmtMs(Date.now() - displayState.sessionStart);
+    console.log(chalk.green(`✔ ${event.label}`) + chalk.gray(`  (total ${total})`));
+    // Reset session state
+    displayState.activeSpecialist = null;
+    displayState.activeDept = null;
+    displayState.stepCount = 0;
+    displayState.sessionStart = Date.now();
+    displayState.thinkStart = 0;
     return;
   }
 
+  // Clear the live spinner line before printing a permanent line
   logUpdate.clear();
 
-  if (event.type === 'tool:start') {
-    console.log(toolBadge(event.label, 'start') + (event.detail ? chalk.gray(` — ${event.detail.slice(0, 80)}`) : ''));
-    return;
+  // ── Specialist start: open department panel ──────────────────────────────
+  if (event.type === 'specialist:start') {
+    displayState.activeSpecialist = event.agent || event.label;
+    displayState.activeDept = event.department || 'General';
+    openSpecialistPanel(event.label, displayState.activeDept, event.detail);
   }
 
-  if (event.type === 'tool:end') {
-    console.log(chalk.gray('  └ ') + toolBadge(event.label, 'end') + (event.detail ? chalk.gray(` · ${event.detail.slice(0, 100)}`) : ''));
-    return;
+  // ── Specialist end: close department panel ───────────────────────────────
+  else if (event.type === 'specialist:end') {
+    const dept = event.department || displayState.activeDept || 'General';
+    closeSpecialistPanel(event.label, dept, event.durationMs);
+    displayState.activeSpecialist = null;
+    displayState.activeDept = null;
   }
 
-  if (event.type === 'tool:error') {
-    console.log(toolBadge(event.label, 'error') + chalk.red(` — ${event.detail || 'Failed'}`));
-    return;
+  // ── Tool start ───────────────────────────────────────────────────────────
+  else if (event.type === 'tool:start') {
+    displayState.toolStartTimes.set(event.label, Date.now());
+    const pfx = indent();
+    const pipe = displayState.activeSpecialist ? chalk.hex('#475569')('│ ') : '';
+    const branch = chalk.hex('#475569')('├─ ');
+    const badge = toolBadge(event.label, 'start');
+    const detail = event.detail ? chalk.gray(` — ${truncate(event.detail, 72)}`) : '';
+    console.log(`${pfx}${pipe}${branch}${badge}${detail}`);
   }
 
-  if (event.type === 'subagent:start') {
+  // ── Tool end ─────────────────────────────────────────────────────────────
+  else if (event.type === 'tool:end') {
+    const startTime = displayState.toolStartTimes.get(event.label);
+    displayState.toolStartTimes.delete(event.label);
+    const timing = startTime ? `  ${fmtMs(Date.now() - startTime)}` : '';
+    const pfx = indent();
+    const pipe = displayState.activeSpecialist ? chalk.hex('#475569')('│ ') : '';
+    const elbow = chalk.hex('#475569')('│   └ ');
+    const badge = toolBadge(event.label, 'end');
+    const detail = event.detail ? chalk.gray(` · ${truncate(event.detail, 60)}`) : '';
+    console.log(`${pfx}${pipe}${elbow}${badge}${detail}${timing}`);
+  }
+
+  // ── Tool error ───────────────────────────────────────────────────────────
+  else if (event.type === 'tool:error') {
+    displayState.toolStartTimes.delete(event.label);
+    const pfx = indent();
+    const pipe = displayState.activeSpecialist ? chalk.hex('#475569')('│ ') : '';
+    const elbow = chalk.hex('#475569')('│   └ ');
+    const badge = toolBadge(event.label, 'error');
+    const err = chalk.red(` — ${truncate(event.detail || 'Failed', 80)}`);
+    console.log(`${pfx}${pipe}${elbow}${badge}${err}`);
+  }
+
+  // ── Subagent start (non-swarm agents like coding, research) ─────────────
+  else if (event.type === 'subagent:start') {
     const isDept = event.agent?.startsWith('dept:');
-    const deptName = (isDept ? event.agent!.split(':')[1] : event.agent) || 'General';
-    console.log('\n' + agentCard(deptName, deptName, event.label + (event.detail ? `\n\n${event.detail}` : ''), maxWidth()));
-    return;
+    const deptName = (isDept ? event.agent!.split(':')[1] : event.department) || 'General';
+    const agentDisplay = event.label;
+    console.log('');
+    console.log(agentCard(agentDisplay, deptName, agentDisplay + (event.detail ? `\n\n${event.detail}` : ''), w));
   }
 
-  const icons: Record<ProgressEvent['type'], string> = {
-    thinking: '…',
-    step: '→',
-    'tool:start': '▶',
-    'tool:end': '✓',
-    'tool:error': '✖',
-    'search:start': '⌕',
-    'search:end': '✓',
-    'fetch:start': '↓',
-    'fetch:end': '✓',
-    done: '✓',
-    'subagent:start': '◆',
-    'subagent:step': '│',
-    'subagent:end': '◆',
-  };
-  const colors: Record<ProgressEvent['type'], (value: string) => string> = {
-    thinking: chalk.gray,
-    step: chalk.magenta,
-    'tool:start': chalk.cyan,
-    'tool:end': chalk.green,
-    'tool:error': chalk.red,
-    'search:start': chalk.blue,
-    'search:end': chalk.green,
-    'fetch:start': chalk.blue,
-    'fetch:end': chalk.green,
-    done: chalk.green,
-    'subagent:start': chalk.bold.magenta,
-    'subagent:step': chalk.magenta,
-    'subagent:end': chalk.bold.green,
-  };
+  // ── Subagent step (e.g. coding agent tool calls) ─────────────────────────
+  else if (event.type === 'subagent:step') {
+    const agentTag = event.agent ? chalk.hex('#A78BFA')(`[${event.agent}] `) : '';
+    console.log(`  ${agentTag}${chalk.hex('#6366F1')('│')} ${chalk.hex('#C4B5FD')(event.label)}`);
+  }
 
-  const icon = icons[event.type];
-  const color = colors[event.type];
-  const prefix = event.agent && event.type.startsWith('subagent') ? chalk.magenta(`[${event.agent}] `) : '';
-  const detail = event.detail ? chalk.gray(` — ${event.detail.length > 120 ? `${event.detail.slice(0, 117)}...` : event.detail}`) : '';
-  console.log(`${prefix}${color(`${icon} ${event.label}`)}${detail}`);
+  // ── Subagent end ─────────────────────────────────────────────────────────
+  else if (event.type === 'subagent:end') {
+    const agentTag = event.agent ? chalk.hex('#A78BFA')(`[${event.agent}] `) : '';
+    console.log(`  ${agentTag}${chalk.green('◆')} ${chalk.green(event.label)}`);
+  }
+
+  // ── Step (Manager/COO summary of tool calls used in a loop step) ─────────
+  else if (event.type === 'step') {
+    displayState.stepCount += 1;
+    const counter = chalk.hex('#64748B')(`[${displayState.stepCount}]`);
+    const arrow = chalk.hex('#8B5CF6')('→');
+    const label = chalk.hex('#C4B5FD')(event.label);
+    const detail = event.detail ? chalk.gray(` · ${truncate(event.detail, 64)}`) : '';
+    console.log(`${arrow} ${counter} ${label}${detail}`);
+  }
+
+  else {
+    // ── Search / fetch events ────────────────────────────────────────────────
+    const simpleIcons: Partial<Record<ProgressEvent['type'], string>> = {
+      'search:start': '⌕',
+      'search:end':   '✓',
+      'fetch:start':  '↓',
+      'fetch:end':    '✓',
+    };
+    const simpleColors: Partial<Record<ProgressEvent['type'], (s: string) => string>> = {
+      'search:start': chalk.blue,
+      'search:end':   chalk.green,
+      'fetch:start':  chalk.blue,
+      'fetch:end':    chalk.green,
+    };
+
+    const icon = simpleIcons[event.type];
+    const color = simpleColors[event.type];
+    if (icon && color) {
+      const detail = event.detail ? chalk.gray(` — ${truncate(event.detail, 80)}`) : '';
+      console.log(`  ${color(`${icon} ${event.label}`)}${detail}`);
+    }
+  }
+
+  // If the thinking ticker is active, trigger an immediate tick to draw the status card
+  // at the new bottom of the terminal.
+  if (thinkingTimer) {
+    triggerThinkingTick();
+  }
 }
 
 export function printError(message: string) {
-  console.error(chalk.red(message));
+  console.error(chalk.red(`✖ ${message}`));
 }

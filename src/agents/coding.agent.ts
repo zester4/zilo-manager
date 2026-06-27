@@ -17,7 +17,9 @@ import { createMCPTools } from '../tools/mcp.tool.js';
 async function createAppBuilderAgent(runId = 'default') {
   const scratchpadTools = createScratchpadTools(`${runId}:app-builder`);
   const composioTools = await createComposioTools(runId);
-  const mcpTools = await createMCPTools();
+  const mcpTools = await createMCPTools({
+    excludeServers: ['filesystem', 'git', 'playwright']
+  });
 
   return new ToolLoopAgent({
     model: models.coding,
@@ -65,7 +67,9 @@ async function createAppBuilderAgent(runId = 'default') {
 async function createQaIntegrationAgent(runId = 'default') {
   const scratchpadTools = createScratchpadTools(`${runId}:qa`);
   const composioTools = await createComposioTools(runId);
-  const mcpTools = await createMCPTools();
+  const mcpTools = await createMCPTools({
+    excludeServers: ['filesystem', 'git', 'playwright']
+  });
 
   return new ToolLoopAgent({
     model: models.coding,
@@ -124,7 +128,9 @@ export async function createCodingAgent(runId = 'default') {
   const appBuilder = await createAppBuilderAgent(runId);
   const qaBuilder = await createQaIntegrationAgent(runId);
   const composioTools = await createComposioTools(runId);
-  const mcpTools = await createMCPTools();
+  const mcpTools = await createMCPTools({
+    excludeServers: ['filesystem', 'git', 'playwright']
+  });
 
   return new ToolLoopAgent({
     model: models.coding,

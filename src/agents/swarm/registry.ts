@@ -24,7 +24,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Review feature completion reports from QA and provide the final sign-off.',
       'KPIs: Sprint velocity, feature-market fit, and ticket clarity.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools },
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...skillTools },
     composioToolkits: ['github', 'linear', 'notion'],
   },
   marketAnalyst: {
@@ -39,7 +39,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Provide the Product Manager with data-backed feature suggestions.',
       'KPIs: Insight depth, threat detection speed, and research accuracy.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools },
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...skillTools },
     composioToolkits: ['firecrawl', 'google_search', 'twitter', 'reddit'],
   },
   uxResearcher: {
@@ -54,8 +54,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Monitor "sentiment drop-off" in the sales funnel.',
       'KPIs: User satisfaction (CSAT), task completion rate, and UI polish score.',
     ].join('\n'),
-    tools: { ...browserTools },
-    composioToolkits: ['mixpanel', 'fullstory', 'hotjar'],
+    tools: { ...fileSystemTools, ...browserTools, ...skillTools },
   },
 
   // ── Engineering & Creative ──────────────────────────────────────────────
@@ -102,7 +101,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '5. Block the CEO from approving deployments if critical tests fail.',
       'KPIs: Test coverage, bug leakage to production, and regression detection.',
     ].join('\n'),
-    tools: { ...browserTools, ...healTools },
+    tools: { ...fileSystemTools, ...browserTools, ...healTools, ...skillTools },
     composioToolkits: ['github', 'sentry', 'playwright'],
   },
   devopsSre: {
@@ -254,8 +253,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Review UI implementation with the UX Researcher.',
       'KPIs: Brand consistency, asset quality, and design-to-code fidelity.',
     ].join('\n'),
-    tools: { ...browserTools },
-    composioToolkits: ['figma', 'canva', 'github'],
+    tools: { ...fileSystemTools, ...browserTools, ...skillTools },
   },
 
   // ── Growth & Marketing ──────────────────────────────────────────────────
@@ -271,7 +269,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Correlate growth experiments with real-time ROI via the Financial Ledger.',
       'KPIs: Conversion rate (CR), viral coefficient, and LTV/CAC ratio.',
     ].join('\n'),
-    tools: { ...browserTools, ...crossAppLedgerTools },
+    tools: { ...fileSystemTools, ...browserTools, ...webIntelligenceTools, ...crossAppLedgerTools, ...skillTools },
     composioToolkits: ['google_analytics', 'firecrawl', 'mixpanel'],
   },
   seoExpert: {
@@ -286,8 +284,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Optimize on-page metadata and internal linking autonomously.',
       'KPIs: Organic traffic, keyword rankings, and technical SEO score.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools },
-    composioToolkits: ['google_search_console', 'firecrawl', 'semrush'],
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...skillTools },
   },
   contentWriter: {
     name: 'Content Writer',
@@ -301,8 +298,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Maintain a consistent and high-quality brand voice across all distribution.',
       'KPIs: Content volume, engagement rate, and search ranking impact.',
     ].join('\n'),
-    tools: { postGenerateTool },
-    composioToolkits: ['wordpress', 'ghost', 'medium', 'notion'],
+    tools: { ...fileSystemTools, postGenerateTool, ...skillTools },
   },
   socialMediaManager: {
     name: 'Social Media Manager',
@@ -316,8 +312,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Monitor community sentiment and report feedback to the UX Researcher.',
       'KPIs: Social follower growth, engagement metrics, and community sentiment.',
     ].join('\n'),
-    tools: { postGenerateTool },
-    composioToolkits: ['twitter', 'linkedin', 'discord', 'reddit'],
+    tools: { ...fileSystemTools, postGenerateTool, ...skillTools },
   },
   adsManager: {
     name: 'Ads Manager',
@@ -331,8 +326,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Report real-time ROAS (Return on Ad Spend) to the CFO.',
       'KPIs: ROAS, cost per acquisition (CPA), and paid conversion volume.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools },
-    composioToolkits: ['google_ads', 'meta_ads', 'linkedin_ads'],
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...skillTools },
   },
   salesOps: {
     name: 'Sales Ops',
@@ -346,7 +340,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Coordinate with Finance Analyst to ensure customer billing is correct.',
       'KPIs: Pipeline size, deal velocity, and lead conversion rate.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools, ...crossAppLedgerTools },
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...crossAppLedgerTools, ...skillTools },
     composioToolkits: ['hubspot', 'salesforce', 'apollo', 'gmail'],
   },
 
@@ -363,7 +357,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Generate weekly financial briefs for the CFO and CEO.',
       'KPIs: Revenue reporting speed, burn rate accuracy, and ROI tracking precision.',
     ].join('\n'),
-    tools: { ...financeTools, ...crossAppLedgerTools },
+    tools: { ...fileSystemTools, ...financeTools, ...crossAppLedgerTools, ...skillTools },
     composioToolkits: ['stripe', 'finance', 'quickbooks'],
   },
   customerSuccess: {
@@ -378,8 +372,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Proactively reach out to "at-risk" customers (low usage/payment fail).',
       'KPIs: Mean time to resolution (MTTR), CSAT, and churn rate impact.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools },
-    composioToolkits: ['zendesk', 'intercom', 'slack', 'discord'],
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...skillTools },
   },
   legalCounsel: {
     name: 'Legal Counsel',
@@ -393,8 +386,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Provide risk assessments for all new vendor integrations.',
       'KPIs: Audit success rate, contract turnaround time, and risk reduction score.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools },
-    composioToolkits: ['docusign', 'github', 'notion'],
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...skillTools },
   },
   logisticsLead: {
     name: 'Logistics Lead',
@@ -408,8 +400,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Coordinate returns and warehouse logistics.',
       'KPIs: Fulfillment accuracy, shipping time, and inventory turnover.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools },
-    composioToolkits: ['shopify', 'ups', 'fedex'],
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...skillTools },
   },
   hrRecruiter: {
     name: 'HR Recruiter',
@@ -423,8 +414,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Coordinate team-wide OKR tracking in Notion.',
       'KPIs: Time-to-hire, agent uptime, and organizational efficiency.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools },
-    composioToolkits: ['greenhouse', 'linkedin', 'notion'],
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...skillTools },
   },
 
   // ── Data & Intelligence ─────────────────────────────────────────────────
@@ -440,7 +430,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Correlate growth experiments with long-term retention data.',
       'KPIs: Data accuracy, insight depth, and forecasting precision.',
     ].join('\n'),
-    tools: { ...shellTools },
+    tools: { ...fileSystemTools, ...shellTools, ...skillTools },
     composioToolkits: ['snowflake', 'bigquery', 'postgresql'],
   },
   biReporter: {
@@ -455,8 +445,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Flag strategic business anomalies to the CEO before they become crises.',
       'KPIs: Reporting timeliness, narrative clarity, and dashboard utility.',
     ].join('\n'),
-    tools: { ...webIntelligenceTools },
-    composioToolkits: ['github', 'notion', 'slack'],
+    tools: { ...fileSystemTools, ...webIntelligenceTools, ...skillTools },
   },
 
   // ── Specialized Security & Optimization ──────────────────────────────────
@@ -472,7 +461,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Lead the technical response during a "Security Crisis".',
       'KPIs: Vulnerability detection rate, patch speed, and zero-day protection.',
     ].join('\n'),
-    tools: { ...shellTools, ...webIntelligenceTools },
+    tools: { ...fileSystemTools, ...shellTools, ...webIntelligenceTools, ...skillTools },
     composioToolkits: ['github', 'sentry', 'auth0'],
   },
   agentOptimizer: {
@@ -487,7 +476,7 @@ export const specialistRegistry: Record<string, SwarmAgentConfig> = {
       '4. Run "Heal Passes" on the swarm’s own memory and context logs.',
       'KPIs: Token efficiency, response latency, and task success rate.',
     ].join('\n'),
-    tools: { ...healTools, ...shellTools },
+    tools: { ...fileSystemTools, ...healTools, ...shellTools, ...skillTools },
     composioToolkits: ['openai', 'anthropic', 'langsmith'],
   },
 };

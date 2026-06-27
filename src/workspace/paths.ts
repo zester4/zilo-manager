@@ -28,8 +28,8 @@ export type WorkspaceLayout = {
 
 export function defaultWorkspaceCandidates() {
   return [
-    path.join(homedir(), 'Downloads', 'ZilMate'),
     path.join(homedir(), 'ZilMate'),
+    path.join(homedir(), 'Downloads', 'ZilMate'),
   ];
 }
 
@@ -40,9 +40,7 @@ export function resolveWorkspaceRoot() {
   for (const candidate of defaultWorkspaceCandidates()) {
     if (existsSync(candidate)) return candidate;
   }
-  return process.platform === 'win32' || process.platform === 'darwin'
-    ? path.join(homedir(), 'Downloads', 'ZilMate')
-    : path.join(homedir(), 'ZilMate');
+  return path.join(homedir(), 'ZilMate');
 }
 
 export function workspaceLayout(root = resolveWorkspaceRoot()): WorkspaceLayout {

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { SwarmOrchestrator } from '../../runtime/swarm.js';
 import { models } from '../../config/models.js';
 import { limits } from '../../safety/limits.js';
-import { createSwarmSpecialist } from './registry.js';
+import { createSwarmSpecialist, specialistRegistry } from './registry.js';
 import { emitProgress } from '../../runtime/progress.js';
 import { crossAppLedgerTools } from '../../tools/cross-app-ledger.tool.js';
 import { createMCPTools, mcpManagementTools } from '../../tools/mcp.tool.js';
@@ -13,7 +13,9 @@ import { executiveTools } from '../../tools/executive.tool.js';
 export async function createDigitalCorporationMain(runId: string = 'default') {
   const orchestrator = SwarmOrchestrator.getInstance();
   const composioTools = await createComposioTools(runId);
-  const mcpTools = await createMCPTools();
+  const mcpTools = await createMCPTools({
+    excludeServers: ['filesystem', 'git', 'playwright']
+  });
 
   return new ToolLoopAgent({
     model: models.manager,
@@ -55,10 +57,29 @@ export async function createDigitalCorporationMain(runId: string = 'default') {
           agentKey: z.string().describe('The key of the specialist to use (e.g., productManager, fullStackCoder, financeAnalyst).'),
         }),
         execute: async ({ task, agentKey }) => {
-          emitProgress({ type: 'thinking', label: `COO delegating to ${agentKey}` });
+          const config = specialistRegistry[agentKey];
+          const agentName = config?.name || agentKey;
+          const department = config?.department || 'General';
 
+          emitProgress({
+            type: 'specialist:start',
+            label: agentName,
+            detail: task.slice(0, 140),
+            agent: agentKey,
+            department,
+          });
+
+          const startMs = Date.now();
           const specialist = createSwarmSpecialist(agentKey);
           const result = await specialist.run(task);
+
+          emitProgress({
+            type: 'specialist:end',
+            label: agentName,
+            agent: agentKey,
+            department,
+            durationMs: Date.now() - startMs,
+          });
 
           return { agent: agentKey, report: result };
         },
@@ -69,13 +90,39 @@ export async function createDigitalCorporationMain(runId: string = 'default') {
           task: z.string().min(10).describe('The business objective (e.g., "Analyze why churn is increasing").'),
         }),
         execute: async ({ task }) => {
-          emitProgress({ type: 'thinking', label: 'COO classifying objective' });
+          emitProgress({ type: 'thinking', label: 'COO classifying objective…' });
           const classification = await orchestrator.classifyTask(task);
 
-          emitProgress({ type: 'step', label: `Objective routed to ${classification.subagent}`, detail: classification.reasoning });
+          const config = specialistRegistry[classification.subagent];
+          const agentName = config?.name || classification.subagent;
+          const department = classification.department || config?.department || 'General';
 
+          emitProgress({
+            type: 'step',
+            label: `Routed to ${agentName}`,
+            detail: classification.reasoning,
+            department,
+          });
+
+          emitProgress({
+            type: 'specialist:start',
+            label: agentName,
+            detail: task.slice(0, 140),
+            agent: classification.subagent,
+            department,
+          });
+
+          const startMs = Date.now();
           const specialist = createSwarmSpecialist(classification.subagent);
           const result = await specialist.run(task);
+
+          emitProgress({
+            type: 'specialist:end',
+            label: agentName,
+            agent: classification.subagent,
+            department,
+            durationMs: Date.now() - startMs,
+          });
 
           return { agent: classification.subagent, department: classification.department, report: result };
         },

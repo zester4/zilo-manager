@@ -1,10 +1,29 @@
 import { isConfirmationActive } from './confirm.js';
 
 export type ProgressEvent = {
-  type: 'thinking' | 'step' | 'tool:start' | 'tool:end' | 'tool:error' | 'search:start' | 'search:end' | 'fetch:start' | 'fetch:end' | 'done' | 'subagent:start' | 'subagent:step' | 'subagent:end';
+  type:
+    | 'thinking'
+    | 'step'
+    | 'tool:start'
+    | 'tool:end'
+    | 'tool:error'
+    | 'search:start'
+    | 'search:end'
+    | 'fetch:start'
+    | 'fetch:end'
+    | 'done'
+    | 'subagent:start'
+    | 'subagent:step'
+    | 'subagent:end'
+    | 'specialist:start'
+    | 'specialist:end';
   label: string;
   detail?: string;
   agent?: string;
+  /** Department name for swarm specialist events (e.g. 'Engineering', 'Growth') */
+  department?: string;
+  /** Elapsed milliseconds — set on :end events to show timing badges */
+  durationMs?: number;
 };
 
 let listener: ((event: ProgressEvent) => void) | undefined;
