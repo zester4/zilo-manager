@@ -12,7 +12,7 @@ const title = `ZilMate ${tag}`;
 
 const notes = `# ${title}
 
-ZilMate ${tag} — Cross-platform premium desktop control suite, native system alerts, audio recording diagnostics, and a warm, personal-partner conversational interface.
+ZilMate ${tag} — Advanced Cascaded Voice Session system, featuring ultra-low latency, custom speaking speeds, keyword boosting, and turn-based barge-in interruptions.
 
 ## Install
 
@@ -25,16 +25,17 @@ zilmate menu
 
 ## Highlights
 
-- **5 Premium Cross-Platform Desktop Tools** — Added powerful, high-fidelity native system tools including \`simulateMouse\` (click, move, drag, scroll), \`displaySystemNotification\` (native OS notifications), \`recordAudioSnippet\` (high-fidelity WAV recording via ffmpeg), \`getActiveWindowContext\` (tracking foreground process, title, and PID), and \`controlSystemVolume\` (volume controls, mute, and media playback keys).
-- **Warm, Supportive Friendly Persona** — Re-aligned the core manager instructions to prioritize a personal partnership, warmth, and reliable trust over sterile, corporate roles, recognizing ZilMate acts as the CEO of his own digital corporation.
-- **Strict TypeScript 6.0 Type-Safety** — Successfully integrated all changes and types to guarantee robust compiling checks and seamless edge-case resolution (such as undefined window contexts).
+- **Ultra-Low Latency Streaming Playback** — Tuned underlying \`ffplay\` configuration parameters (\`-fflags nobuffer+fastseek -flags low_delay -strict experimental\`) to minimize streaming audio latency during Text-To-Speech.
+- **Turn-Based Conversational Barge-In** — Integrated real-time turn tracking and a user-speaking event hook (\`SpeechStarted\`). Speaking instantly kills any active audio output processes (\`SIGKILL\`), cuts off assistant audio, and invalidates/discards stale ongoing background agent reasoning turns.
+- **Custom Speaking Speeds** — Added \`ZILMATE_VOICE_TTS_SPEED\` supporting speed adjustments natively in Deepgram live TTS stream configurations (values \`0.7\` to \`1.5\`).
+- **Keyword Boosting** — Introduced \`ZILMATE_VOICE_LISTEN_KEYWORDS\` to feed comma-separated word arrays directly to Deepgram's live Speech-To-Text connection, improving CLI voice command recognition.
+- **Type-Safe Full Build Validation** — Cleanly compiled under strict TypeScript compiler rules.
 
 ## Quick Checks
 
 \`\`\`powershell
-zilmate setup
-zilmate doctor
-zilmate menu
+zilmate voice doctor
+zilmate voice devices
 \`\`\`
 
 ## npm

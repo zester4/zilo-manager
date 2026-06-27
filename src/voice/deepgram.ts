@@ -45,6 +45,8 @@ export function getVoiceConfig(): ZilMateVoiceConfig {
   };
   if (env.zilmateVoiceEotThreshold !== undefined) config.eotThreshold = env.zilmateVoiceEotThreshold;
   if (env.zilmateVoiceEagerEotThreshold !== undefined) config.eagerEotThreshold = env.zilmateVoiceEagerEotThreshold;
+  if (env.zilmateVoiceTtsSpeed !== undefined) config.ttsSpeed = env.zilmateVoiceTtsSpeed;
+  if (env.zilmateVoiceListenKeywords.length > 0) config.listenKeywords = env.zilmateVoiceListenKeywords;
   return config;
 }
 

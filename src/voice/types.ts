@@ -20,6 +20,8 @@ export type ZilMateVoiceConfig = {
   sttFallbackModel: string;
   useNovaFallback: boolean;
   configured: boolean;
+  ttsSpeed?: number;
+  listenKeywords?: string[];
 };
 
 export type ZilMateVoiceSessionOptions = {

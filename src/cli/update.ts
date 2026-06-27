@@ -1,6 +1,10 @@
 import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { printPanel } from './format.js';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
+import chalk from 'chalk';
+import { printPanel, padAnsiLine } from './format.js';
+import { workspaceLayout } from '../workspace/paths.js';
 
 const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
@@ -122,3 +126,109 @@ export async function runSelfUpdate(options: { tag?: string; dryRun?: boolean } 
     throw error;
   }
 }
+
+export function showUpdateBanner(current: string, latest: string) {
+  const width = 60;
+  const innerWidth = width - 4; // 56
+  
+  const title = `🚀 Update available: ${chalk.red(current)} → ${chalk.green(latest)}`;
+  const cmd = chalk.cyan('zilmate update');
+  const tip = `Run ${cmd} to get the latest features!`;
+
+  const top = chalk.yellow(`╭${'─'.repeat(width - 2)}╮`);
+  const line1 = chalk.yellow('│ ') + padAnsiLine(title, innerWidth) + chalk.yellow(' │');
+  const divider = chalk.yellow(`├${'─'.repeat(width - 2)}┤`);
+  const line2 = chalk.yellow('│ ') + padAnsiLine(tip, innerWidth) + chalk.yellow(' │');
+  const bottom = chalk.yellow(`╰${'─'.repeat(width - 2)}╯`);
+
+  console.log('');
+  console.log(top);
+  console.log(line1);
+  console.log(divider);
+  console.log(line2);
+  console.log(bottom);
+  console.log('');
+}
+
+export async function checkForUpdateOnce(currentVersion: string) {
+  // 1. Skip if explicit update or version command is run
+  const argv = process.argv;
+  if (
+    argv.includes('update') ||
+    argv.includes('version') ||
+    argv.includes('--version') ||
+    argv.includes('-V') ||
+    argv.includes('-v')
+  ) {
+    return;
+  }
+
+  try {
+    const layout = workspaceLayout();
+    const cacheDir = layout.config;
+    const cachePath = path.join(cacheDir, 'update-check.json');
+
+    // Ensure cache folder exists
+    if (!existsSync(cacheDir)) {
+      mkdirSync(cacheDir, { recursive: true });
+    }
+
+    let cache: {
+      lastCheck?: number;
+      latestVersion?: string;
+      notifiedVersion?: string;
+    } = {};
+
+    if (existsSync(cachePath)) {
+      try {
+        cache = JSON.parse(readFileSync(cachePath, 'utf8'));
+      } catch {
+        // Corrupted JSON, start fresh
+      }
+    }
+
+    const now = Date.now();
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+
+    let latest = cache.latestVersion;
+
+    // Check if we need to query npm (either no cached time, or > 24 hours has passed)
+    if (!cache.lastCheck || now - cache.lastCheck > twentyFourHours) {
+      try {
+        // Query npm with a 1.5 second timeout to keep startup instant and prevent offline hangs
+        const fetchPromise = latestNpmVersion();
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 1500)
+        );
+
+        // Wait for npm or timeout
+        const fetchedVersion = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        if (fetchedVersion) {
+          latest = fetchedVersion;
+          cache.latestVersion = latest;
+          cache.lastCheck = now;
+          writeFileSync(cachePath, JSON.stringify(cache, null, 2), 'utf8');
+        }
+      } catch {
+        // If npm query fails or times out, we fallback to cached version
+        // but don't update lastCheck so we can try again on the next run
+      }
+    }
+
+    if (!latest) {
+      return;
+    }
+
+    // Compare versions: if latest > current and we haven't notified for this latest version
+    if (compareVersions(currentVersion, latest) < 0 && cache.notifiedVersion !== latest) {
+      showUpdateBanner(currentVersion, latest);
+      // Mark as notified so they only see it ONCE
+      cache.notifiedVersion = latest;
+      writeFileSync(cachePath, JSON.stringify(cache, null, 2), 'utf8');
+    }
+  } catch {
+    // Completely silent catch-all so update checking never crashes the main CLI
+  }
+}
+

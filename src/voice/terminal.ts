@@ -12,6 +12,9 @@ import type { ZilMateVoiceEvent } from './types.js';
 
 const execFileAsync = promisify(execFile);
 
+const activePlayers = new Set<ChildProcessWithoutNullStreams>();
+
+
 export type TerminalVoiceRuntimeCheck = {
   name: string;
   ok: boolean;
@@ -151,10 +154,14 @@ function playbackArgs() {
     'error',
     '-nodisp',
     '-autoexit',
+    '-fflags', 'nobuffer+fastseek',
+    '-flags', 'low_delay',
+    '-strict', 'experimental',
     '-i',
     '-',
   ];
 }
+
 
 function wavHeader(dataBytes: number, sampleRate = 24000, channels = 1) {
   const header = Buffer.alloc(44);
@@ -189,6 +196,7 @@ async function playPcmWithFfplay(pcm: Buffer, onEvent?: (event: ZilMateVoiceEven
   const file = join(tmpdir(), `zilmate-voice-${randomUUID()}.wav`);
   await writeFile(file, wavFromPcm(pcm));
   const player = spawn('ffplay', ['-hide_banner', '-loglevel', 'error', '-nodisp', '-autoexit', file], { windowsHide: true });
+  activePlayers.add(player);
   let stderr = '';
   player.stderr.setEncoding('utf8');
   player.stderr.on('data', (chunk) => {
@@ -204,9 +212,11 @@ async function playPcmWithFfplay(pcm: Buffer, onEvent?: (event: ZilMateVoiceEven
       });
     }
   } finally {
+    activePlayers.delete(player);
     await rm(file, { force: true });
   }
 }
+
 
 function playbackMode() {
   return env.zilmateVoicePlaybackMode === 'wav' ? 'wav' : 'stream';
@@ -214,6 +224,7 @@ function playbackMode() {
 
 function createStreamingPlayer(onEvent?: (event: ZilMateVoiceEvent) => void) {
   const player = spawn('ffplay', playbackArgs(), { windowsHide: true });
+  activePlayers.add(player);
   let stderr = '';
   let bytes = 0;
   let started = false;
@@ -222,11 +233,15 @@ function createStreamingPlayer(onEvent?: (event: ZilMateVoiceEvent) => void) {
     stderr += chunk;
   });
   player.on('error', (error) => {
+    activePlayers.delete(player);
     onEvent?.({
       type: 'error',
       message: `Audio playback failed to start: ${error instanceof Error ? error.message : String(error)}`,
       timestamp: new Date().toISOString(),
     });
+  });
+  player.on('close', () => {
+    activePlayers.delete(player);
   });
 
   return {
@@ -242,6 +257,7 @@ function createStreamingPlayer(onEvent?: (event: ZilMateVoiceEvent) => void) {
     finish: async () => {
       if (!player.stdin.destroyed) player.stdin.end();
       await waitForChildClose(player);
+      activePlayers.delete(player);
       if (player.exitCode && player.exitCode !== 0) {
         onEvent?.({
           type: 'error',
@@ -253,6 +269,20 @@ function createStreamingPlayer(onEvent?: (event: ZilMateVoiceEvent) => void) {
     },
   };
 }
+
+export function abortTerminalSpeech() {
+  for (const player of activePlayers) {
+    try {
+      if (!player.killed) {
+        player.kill('SIGKILL');
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  activePlayers.clear();
+}
+
 
 async function* childStdout(child: ChildProcessWithoutNullStreams, signal: AbortSignal): AsyncIterable<Buffer> {
   let stderr = '';
@@ -379,6 +409,9 @@ export async function startTerminalVoiceSession(options: {
     await startCascadedVoiceSession({
       ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
       audio: childStdout(mic, controller.signal),
+      onUserSpeaking: () => {
+        abortTerminalSpeech();
+      },
       onEvent: (event) => {
         options.onEvent?.(event);
         if (event.type === 'status' && event.label === 'TTS audio flushed') {
@@ -420,6 +453,7 @@ export async function startTerminalVoiceSession(options: {
       },
     });
     await playbackQueue;
+
   } finally {
     input.off('data', stopOnCommand);
     stop();

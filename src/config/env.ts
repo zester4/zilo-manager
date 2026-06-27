@@ -65,6 +65,8 @@ export type Env = {
   zilmateVoiceEagerEotThreshold: number | undefined;
   zilmateVoiceSttFallbackModel: string;
   zilmateVoiceUseNovaFallback: boolean;
+  zilmateVoiceTtsSpeed: number | undefined;
+  zilmateVoiceListenKeywords: string[];
   managerModel: string;
   helpModel: string | undefined;
   postModel: string | undefined;
@@ -112,6 +114,8 @@ export const env: Env = {
   zilmateVoiceEagerEotThreshold: process.env.ZILMATE_VOICE_EAGER_EOT_THRESHOLD ? Number(process.env.ZILMATE_VOICE_EAGER_EOT_THRESHOLD) : undefined,
   zilmateVoiceSttFallbackModel: process.env.ZILMATE_VOICE_STT_FALLBACK_MODEL || 'nova-3',
   zilmateVoiceUseNovaFallback: process.env.ZILMATE_VOICE_USE_NOVA_FALLBACK === 'true',
+  zilmateVoiceTtsSpeed: process.env.ZILMATE_VOICE_TTS_SPEED ? Number(process.env.ZILMATE_VOICE_TTS_SPEED) : undefined,
+  zilmateVoiceListenKeywords: (process.env.ZILMATE_VOICE_LISTEN_KEYWORDS || '').split(',').map((item) => item.trim()).filter(Boolean),
   managerModel: process.env.ZILO_MANAGER_MODEL || 'minimax/minimax-m3',
   helpModel: process.env.ZILO_HELP_MODEL || undefined,
   postModel: process.env.ZILO_POST_MODEL || undefined,

@@ -51,6 +51,7 @@ export type CascadedVoiceSessionOptions = {
   onEvent?: (event: ZilMateVoiceEvent) => void;
   onAudio?: (chunk: Uint8Array) => void;
   onUserTranscript: (text: string) => Promise<string | void> | string | void;
+  onUserSpeaking?: () => void;
 };
 
 const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<unknown>;
@@ -97,6 +98,9 @@ function listenOptions() {
     encoding: 'linear16',
     sample_rate: 16000,
   };
+  if (config.listenKeywords && config.listenKeywords.length > 0) {
+    options.keyword = config.listenKeywords;
+  }
   if (config.listenModel.startsWith('flux-')) {
     if (config.eotThreshold !== undefined) options.eot_threshold = config.eotThreshold;
     if (config.eagerEotThreshold !== undefined) options.eager_eot_threshold = config.eagerEotThreshold;
@@ -162,12 +166,16 @@ function listenEndpoint() {
 
 function speakOptions() {
   const config = getVoiceConfig();
-  return {
+  const options: Record<string, unknown> = {
     model: config.ttsModel,
     encoding: 'linear16',
     sample_rate: 24000,
     container: 'none',
   };
+  if (config.ttsSpeed !== undefined) {
+    options.speed = config.ttsSpeed;
+  }
+  return options;
 }
 
 function listenForTtsAudio(
@@ -348,6 +356,7 @@ export async function startCascadedVoiceSession(options: CascadedVoiceSessionOpt
   const ttsState = listenForTtsAudio(speak, options);
   let pendingTranscript = '';
   let answering = Promise.resolve();
+  let currentTurnId = 0;
 
   listen.on('open', () => emit(options, { type: 'status', label: useNova ? 'Nova listening' : 'Flux listening', detail: useNova ? config.sttFallbackModel : config.listenModel, timestamp: now() }));
   listen.on('close', (data) => {
@@ -366,6 +375,8 @@ export async function startCascadedVoiceSession(options: CascadedVoiceSessionOpt
   listen.on('Connected', () => emit(options, { type: 'status', label: 'Flux connected', detail: getVoiceConfig().listenModel, timestamp: now() }));
   listen.on('SpeechStarted', () => {
     speak.clear?.();
+    currentTurnId++;
+    options.onUserSpeaking?.();
     emit(options, { type: 'status', label: 'User started speaking', detail: 'barge-in enabled', timestamp: now() });
   });
   const onTurn = (data: unknown) => {
@@ -382,8 +393,11 @@ export async function startCascadedVoiceSession(options: CascadedVoiceSessionOpt
       return;
     }
 
+    const turnId = currentTurnId;
     answering = answering.then(async () => {
+      if (turnId !== currentTurnId) return;
       const reply = await options.onUserTranscript(finalText);
+      if (turnId !== currentTurnId) return;
       if (!reply || typeof reply !== 'string') return;
       emit(options, { type: 'transcript', role: 'assistant', text: reply, final: true, timestamp: now() });
       await speakChunked(speak, ttsState, reply);

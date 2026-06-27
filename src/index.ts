@@ -32,7 +32,7 @@ import { printDoctorChecks } from './cli/health.js';
 import { printAppsStatus } from './cli/apps.js';
 import { printMemoryTable } from './cli/memory.js';
 import { listVoiceDevices, printVoiceConfig, runTerminalVoiceLive, runVoiceAgentProbe, runVoiceDoctor, runVoiceSpeakTest, runVoiceTurn } from './cli/voice.js';
-import { printVersionStatus, runSelfUpdate } from './cli/update.js';
+import { printVersionStatus, runSelfUpdate, checkForUpdateOnce } from './cli/update.js';
 import { captureCameraCli, listCameraDevicesCli, runCameraDoctorCli } from './cli/camera.js';
 import { printModelBrowser } from './cli/models.js';
 import { startChatListener } from './cli/chat.js';
@@ -63,7 +63,7 @@ const program = new Command();
 program
   .name('zilmate')
   .description('ZilMate Agent')
-  .version('1.9.8');
+  .version('1.9.9');
 
 program
   .command('welcome')
@@ -1079,12 +1079,13 @@ program
 
 
 async function main() {
+  await initWorkspace().catch(() => undefined);
+  await checkForUpdateOnce(program.version() || '1.9.9');
+
   if (process.argv.length <= 2) {
-    await initWorkspace().catch(() => undefined);
     await startDefaultLauncher();
     await closeMCPClients();
   } else {
-    await initWorkspace().catch(() => undefined);
     try {
       await program.parseAsync(process.argv);
       await closeMCPClients();
