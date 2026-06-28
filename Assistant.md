@@ -9,7 +9,7 @@ Welcome to the **ZilMate Assistant** handbook. This document describes the power
 We polished the terminal start-up sequence to offer a clean, premium visual aesthetic from the first second of execution.
 
 *   **The Issue**: Standard `dotenv` (v17.4+) logs raw key injection counts and random tip banners (like `◇ injected env...` and `tip: ⌘ suppress logs`) to standard output when compiling and running. This leaked raw configuration info and cluttered the space above the beautiful ASCII welcome banner.
-*   **The Solution**: Implemented a **Bulletproof Console Interceptor Wrapper** inside [src/config/env.ts](file:///c:/Users/mseyy/Downloads/zilo-manager/src/config/env.ts):
+*   **The Solution**: Implemented a **Bulletproof Console Interceptor Wrapper** inside [src/config/env.ts](src/config/env.ts):
     ```typescript
     const originalLog = console.log;
     const originalError = console.error;
@@ -28,7 +28,7 @@ We polished the terminal start-up sequence to offer a clean, premium visual aest
 
 ## 🎨 2. Visual Swarm Trace Layout Tweaks (v1.10.2)
 
-We overhauled the visual layout within the HTML trace reporting view inside [src/observability/traces.ts](file:///c:/Users/mseyy/Downloads/zilo-manager/src/observability/traces.ts) to enhance clarity, scalability, and usability:
+We overhauled the visual layout within the HTML trace reporting view inside [src/observability/traces.ts](src/observability/traces.ts) to enhance clarity, scalability, and usability:
 
 *   **Fluid-Grid Scaling**: Removed rigid, legacy viewport limits (`h-full`, `lg:overflow-hidden`) on main tags, allowing trace timeline sections, Gantt chart columns, and pre-formatted text containers to scale dynamically with the screen height.
 *   **Expanded Inspector Panels**: Stripped raw `max-h-60`, `max-h-52`, and `max-h-36` scrolling blocks from raw JSON inspect panels, collaboration reports, and wiki card text elements. This ensures large outputs render in full glory without nested, awkward multi-pane scrollbars.
@@ -60,7 +60,25 @@ Intercepts all local host shell commands and filesystem write streams via high-p
 
 ---
 
-## 🛠️ 4. Extended Developer & SysOps Toolkits (v1.10.0)
+## 🧠 4. Swarm Memory Systems & Session Continuity (v1.10.1)
+
+We designed a multi-tiered, durable memory ecosystem to guarantee context retention, cross-agent coordination, and crash/restart resilience:
+
+### A. Session Continuity Engine (`session-continuity.tool.ts`)
+*   **Persistent State Serialization**: Saves comprehensive, structural JSON handoffs (`handoff-[sessionId].json`) including progress summaries, subsequent task lists, and open execution threads to disk.
+*   **Seamless Resumes**: Upon start-up or reboot, the system automatically pulls the latest state vector, allowing agents to instantly catch up without requiring the user to repeat instructions.
+
+### B. Durable Private Notebook (`notebook.md` & `notes.json`)
+*   Provides a structured workspace journal where the agents write down durable project constraints, system architecture decisions, configured ports, active CLI processes, and environmental patterns.
+*   This acts as a secondary brain, isolated from short-term conversation context, that is indexed and queryable via keyword search.
+
+### C. Joint War Room & Swarm Vector Blackboard
+*   **SuperMemory & Upstash Vector** power a shared, semantic Corporate Wiki where any department agent can publish critical schemas, documentation, and interface specs, making them immediately accessible across the decentralized corporation.
+*   **Local Thread Scratchpads**: Temporary thread planning journals (`scratchpad.tool.ts`) used within a single invocation, automatically discarded upon task completion to keep context windows pristine.
+
+---
+
+## 🛠️ 5. Extended Developer & SysOps Toolkits (v1.10.0)
 
 We packed the core agent executable with native, high-performance tool integrations to handle real-world deployment challenges:
 
@@ -84,7 +102,7 @@ We packed the core agent executable with native, high-performance tool integrati
 
 ---
 
-## 📊 5. Key CLI Command Reference
+## 📊 6. Key CLI Command Reference
 
 Access all new features directly from your command line:
 
@@ -100,18 +118,18 @@ Access all new features directly from your command line:
 
 ---
 
-## ⚡ 6. Patch Release Polish (v1.10.3)
+## ⚡ 7. Patch Release Polish (v1.10.3)
 
 We implemented critical UX and cognitive optimizations to enhance interactive CLI stability, upgrade the background self-learning model, and align coding delegates with corporate wiki databases.
 
 ### 🔇 TTY Prompt Thinking Ticker Suppression
 *   **The Issue**: The global `thinkingTimer` background spinner (operating at an 80ms interval) continued printing re-draw sequences while `readline` was awaiting user confirmations or multi-select inputs. This corrupted checkbox displays and caused line misalignment in standard terminals.
-*   **The Solution**: Engineered `pauseThinkingTicker()` and `resumeThinkingTicker()` hooks inside [src/cli/format.ts](file:///c:/Users/mseyy/Downloads/zilo-manager/src/cli/format.ts) to gracefully pause background renders during active TTY prompts inside [src/cli/confirm.ts](file:///c:/Users/mseyy/Downloads/zilo-manager/src/cli/confirm.ts).
+*   **The Solution**: Engineered `pauseThinkingTicker()` and `resumeThinkingTicker()` hooks inside [src/cli/format.ts](src/cli/format.ts) to gracefully pause background renders during active TTY prompts inside [src/cli/confirm.ts](src/cli/confirm.ts).
 
 ### 🔄 Dual-Pronged Performance Optimization Loop
 *   **Offensive + Defensive Harvester**: Expanded the self-optimization compiler to capture both defensive guardrails (preventing compile-time and runtime failures) and offensive design accelerators (reusable patterns, prompt enhancements, and efficiency formulas).
-*   **Semantic Deduplication**: Upgraded the optimizer in [src/observability/optimizer.ts](file:///c:/Users/mseyy/Downloads/zilo-manager/src/observability/optimizer.ts) to pre-query active rules from the Wiki, prompting the LLM to only output net-new rules or updates to existing ones (`isUpdateOfExisting: true`), preventing guideline bloat.
+*   **Semantic Deduplication**: Upgraded the optimizer in [src/observability/optimizer.ts](src/observability/optimizer.ts) to pre-query active rules from the Wiki, prompting the LLM to only output net-new rules or updates to existing ones (`isUpdateOfExisting: true`), preventing guideline bloat.
 
 ### 🧠 Semantic Corporate Wiki for Coding Subagents
-*   **Aligning Coding Delegates**: Equipped the internal `appBuilder` and `qaIntegration` subagents inside [src/agents/coding.agent.ts](file:///c:/Users/mseyy/Downloads/zilo-manager/src/agents/coding.agent.ts) with full corporate wiki tools (`queryCorporateWiki` and `publishToCorporateWiki`).
+*   **Aligning Coding Delegates**: Equipped the internal `appBuilder` and `qaIntegration` subagents inside [src/agents/coding.agent.ts](src/agents/coding.agent.ts) with full corporate wiki tools (`queryCorporateWiki` and `publishToCorporateWiki`).
 *   **Unified Context Integration**: Subagents now fetch relational requirements, third-party schemas, and monetization guides dynamically before scaffolding code, guaranteeing architectural sync.
