@@ -12,7 +12,9 @@ const title = `ZilMate ${tag}`;
 
 const notes = `# ${title}
 
-ZilMate ${tag} — The ultimate power-up release, transforming ZilMate into an extremely robust, cross-platform system. It introduces a suite of DevOps, SysOps, Multimedia, Cloud Storage, and Unified Corporate Wiki tools that can "survive anything" on Windows, macOS, and Linux with full local/offline fallbacks and extensive diagnostic safeguards.
+ZilMate ${tag} — The Official **ZilMate Swarm (Digital Corporation Blueprint)** Release! 🌌
+
+This release officially introduces the decentralized, multi-agent Digital Corporation architecture, powering 30+ specialists across 6 business divisions. By deploying a horizontal Peer-to-Peer Coordination Bus and Semantic Corporate Wiki backends, ZilMate bypasses rigid centralized supervisors, reducing operational token costs, cutting latency, and facilitating deep collaborative pipelines.
 
 ## Install
 
@@ -20,34 +22,28 @@ ZilMate ${tag} — The ultimate power-up release, transforming ZilMate into an e
 npm install -g zilmate@${version}
 zilmate setup
 zilmate doctor
-zilmate menu
+zilmate status
 \`\`\`
 
-## Highlights
+## 🌌 Swarm Architecture Highlights (Digital Corporation Blueprint)
 
-### ☁️ Cloud Storage (Multi-Provider Stream-Safe Storage)
-- **Zero-Memory Chunked Uploads & Content-Type Detection** — Supports uploading massive database dumps, screenshots, and logs using official SDK libraries for AWS S3, Google Cloud Storage, and Vercel Blob. Auto-detects extensions to set beautiful in-browser rendering.
-- **Recursive Directory Purging** — Easily remove entire directories recursively on S3, GCS, or Vercel Blob with batched deletion.
-- **Temporary Signed URL Generation** — Generate pre-signed secure URLs for timed reading/writing.
+- **🏛️ Departmental Topology** — Organizes 30+ AI specialists across 6 core corporate divisions:
+  - **Strategy & Product** (Product Manager, UX Researcher, Market Analyst)
+  - **Engineering & Creative** (Architect, Full-Stack Coder, QA Engineer, SRE, Video Producer, Security Auditors)
+  - **Development Division** (Frontend/Backend Architects, DB Specialist, Auth/Billing Specialist, SRE, Data Intelligence, Mobile Coder)
+  - **Growth & Marketing** (Growth Hacker, SEO Expert, Content/Ads/Social Managers, E-Comm Merchant, CRO, AI SEO Strategist)
+  - **Operations & CS** (CS, Legal Counsel, Logistics, HR, Finance Analyst)
+  - **Data & Intelligence** (Data Scientist, BI Reporter, Agent Optimizer)
+- **⚡ Dual-Pillar P2P Coordination Fabric**:
+  - **Active P2P Bus (Joint War Room)**: Agents can bypass centralized coordinators and invoke \`collaborateWithPeer\` to spin up dedicated sub-threads for task resolution.
+  - **Passive blackboard Bus (Semantic Corporate Wiki)**: Agents publish high-value deliverables to a shared semantic index (SuperMemory / Upstash Vector) for others to query asynchronously on-demand.
+- **🛡️ Semantic Approvals Firewall (\`approvals.ts\`)** — Intercepts filesystem and terminal commands via high-speed regex checks and low-latency LLM guardrails to prevent OWASP and host shell exploits.
+- **🛑 Departmental Suspension** — Safe-guards operation by enabling operators to halt or resume specific departments at any time without halting the global swarm.
 
-### 🛠️ DevOps (Docker & Env Management)
-- **Container Command Execution (\`execDockerCommand\`)** — Run command arrays inside running containers securely with strict command-injection protection (e.g., seeding a database inside a Postgres container).
-- **Container Control & Logs** — Query, start, stop, restart, kill, and fetch real-time logs of Docker containers.
-- **Env Validation** — Securely audits and validates local \`.env\` structures against standard examples without leaking secrets.
-
-### 🖥️ SysOps (System & Port Diagnostics)
-- **Port-Based Process Termination** — Scan active listening ports and immediately terminate blocking processes holding development ports (e.g., \`3000\`, \`8080\`) across Windows, macOS, and Linux.
-- **Real-Time Host Metrics** — Monitor host processor utilization, RAM allocation, disk spaces, and uptime with robust command fallbacks.
-- **Network Routing & Database Schema Inspect** — Perform trace routes, ping latency audits, and explore SQLite database structures via local tools or Python fallbacks.
-
-### 🎙️ Multimedia (Resilient Speech-To-Text & Offline Speech Synthesis)
-- **3-Tier Text-To-Speech Pipeline** — Prioritizes **Deepgram Aura-2** (low latency, high fidelity), falls back to **OpenAI Speech API**, and gracefully cascades to **Local Offline Speech Synthesis** (Windows SAPI via PowerShell, macOS \`say\`, Linux \`espeak\`/\`festival\`) when offline or uncredentialed.
-- **Speech-to-Text & Transcoding** — Seamless audio transcription cascading to Deepgram Nova-2 / OpenAI Whisper-1, video-to-audio extraction, and FFmpeg-driven video transcoding.
-- **Image Watermarking** — Optimize images with custom text watermarks overlaid beautifully in the bottom-right corner using secure filtergraph escaping.
-
-### 📚 Unified Corporate Wiki (SuperMemory & Upstash Vector)
-- **Semantic Knowledge Engine** — Fully integrates **SuperMemory** and **Upstash Vector** for corporate-grade document indexing and search.
-- **Diagnostics and Setup Wizards** — Setup interactive wizards for wiki backends and run comprehensive automated connectivity testing via \`zilmate doctor\`.
+## 🛠️ Also Included in the 1.10.x Release Train
+- **☁️ Cloud Storage Integration** — Stream-safe chunked uploads, recursive directory purging, and timed pre-signed URL generation.
+- **🎙️ Multimedia Engine** — Resilient 3-tier Speech-to-text and Text-To-Speech pipelines featuring offline native OS speech synthesis engine fallbacks.
+- **🖥️ SysOps & DevOps Toolkits** — Cross-platform port monitoring, process terminators, real-time metrics, and container execution.
 
 ## npm
 
