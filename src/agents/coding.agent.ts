@@ -15,6 +15,7 @@ import { createComposioTools } from '../tools/composio.tool.js';
 import { createMCPTools } from '../tools/mcp.tool.js';
 import { devopsTools } from '../tools/devops.tool.js';
 import { cloudTools } from '../tools/cloud.tool.js';
+import { corporateWikiTools } from '../tools/corporate-wiki.tool.js';
 
 async function createAppBuilderAgent(runId = 'default') {
   const scratchpadTools = createScratchpadTools(`${runId}:app-builder`);
@@ -45,6 +46,7 @@ async function createAppBuilderAgent(runId = 'default') {
       '15. Technical documentation.',
       '',
       'Use skills first when the task matches a framework or domain: searchSkills/readSkill before designing Vite, Next.js, React, shadcn, ai-elements, AI SDK, Composio, Supabase, games, or desktop workflows.',
+      'Use queryCorporateWiki to gain situational awareness on company schemas, database contracts, or previous business requirements, and publishToCorporateWiki to save critical API definitions, code structures, or engineering plans.',
       'Choose the existing stack when inside a repo. For new frontend apps, prefer Vite for lightweight apps/games and Next.js when routing, server APIs, auth, SDK routes, or deployment structure matter.',
       'Implement real working screens and workflows, not placeholder landing pages. For games, build actual gameplay. For apps, build the usable first screen and the expected controls/states.',
       'Use file tools for targeted edits, shell tools for installs/builds/tests (use executeCommandAsync to run dev servers, listeners, or long tests in the background to avoid blocking/hanging, and checkCommandStatus to track them), and notebook tools to save durable project decisions, commands, ports, and follow-up context.',
@@ -63,6 +65,7 @@ async function createAppBuilderAgent(runId = 'default') {
       ...scratchpadTools,
       ...composioTools,
       ...mcpTools,
+      ...corporateWikiTools,
     },
     stopWhen: stepCountIs(limits.subagentSteps),
   });
@@ -80,6 +83,7 @@ async function createQaIntegrationAgent(runId = 'default') {
     instructions: [
       'You are ZilMate QA and Integration Builder, an internal coding subagent for verification, debugging, test coverage, dependency checks, and release readiness.',
       'Read the implementation and repo scripts before testing. Use skills when framework-specific testing or build rules exist.',
+      'Use queryCorporateWiki to discover known environment patterns, test specs, or prior safety criteria compiled by other agents.',
       'Run the narrowest useful checks first, then broaden when shared behavior or user-facing workflows are touched.',
       'Fix build/type/lint/runtime failures when the cause is clear. Do not hide failed checks; report command, exit state, and useful error lines. Use executeCommandAsync to run long tests, servers, or listeners asynchronously in the background so you never hang, and monitor them via checkCommandStatus.',
       'Use notebook tools to persist durable verification notes, recurring gotchas, release steps, and environment assumptions.',
@@ -99,6 +103,7 @@ async function createQaIntegrationAgent(runId = 'default') {
       ...scratchpadTools,
       ...composioTools,
       ...mcpTools,
+      ...corporateWikiTools,
     },
     stopWhen: stepCountIs(limits.subagentSteps),
   });
@@ -149,6 +154,7 @@ export async function createCodingAgent(runId = 'default') {
       'Use git tools for branch awareness, diffs, staging, and commits. Never force-push unless the user explicitly requests it.',
       'Use searchSkills/readSkill when a repo skill documents conventions. For AI SDK work, verify against local ai docs/source. For Composio integrations, follow search -> link -> execute patterns and keep secrets server-side.',
       'Use scratchpad for temporary run planning. Use notebook tools for durable project memory: architecture decisions, setup steps, known failures, ports, commands, and handoff notes.',
+      'Use corporate wiki tools (queryCorporateWiki / publishToCorporateWiki) to query centralized schemas and design specs, and publish final deliverables or architectural decisions so other specialist agents instantly have access to them.',
       'Report what you changed, which files, subagents used, and test/build output. Keep the final concise but include failures honestly.',
       'Do not claim tests passed unless executeCommand or checkCommandStatus output shows success. Use executeCommandAsync to spawn long-running listeners, dev servers, or tasks asynchronously in the background so you never hang, and monitor them via checkCommandStatus.',
     ].join(' '),
@@ -167,6 +173,7 @@ export async function createCodingAgent(runId = 'default') {
       ...scratchpadTools,
       ...composioTools,
       ...mcpTools,
+      ...corporateWikiTools,
     },
     stopWhen: stepCountIs(limits.subagentSteps),
   });

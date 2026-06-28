@@ -5,19 +5,12 @@ import chalk from 'chalk';
 import type { ConfirmationHandler, ConfirmationRequest } from '../runtime/confirm.js';
 import { hasSessionApproval } from '../runtime/confirm.js';
 import { theme, wrapText } from './theme.js';
+import { pauseThinkingTicker, resumeThinkingTicker } from './format.js';
 
 function getSingleKey(): Promise<{ name: string; ctrl: boolean; shift: boolean; sequence: string }> {
   return new Promise((resolve) => {
-    readline.emitKeypressEvents(input);
-    const wasRaw = input.isRaw;
-    if (input.isTTY) {
-      input.setRawMode(true);
-    }
     const onKey = (str: string, key: readline.Key) => {
       input.off('keypress', onKey);
-      if (input.isTTY) {
-        input.setRawMode(wasRaw);
-      }
       resolve({
         name: key?.name || '',
         ctrl: !!key?.ctrl,
@@ -241,92 +234,122 @@ async function runInteractiveConfirmation(request: ConfirmationRequest): Promise
   let lines = renderFrame(request, N, cursor, activeButton, checked);
   lines.forEach(line => console.log(line));
 
-  while (true) {
-    const key = await getSingleKey();
-    
-    if (key.ctrl && key.name === 'c') {
-      clearLines(lines.length);
-      console.log(chalk.red('✗ Cancelled by user'));
-      return false;
-    }
-    
-    if (key.name === 'up') {
-      if (N > 0) {
-        if (cursor >= N) {
-          cursor = N - 1;
-        } else {
-          cursor = cursor === 0 ? N + activeButton : cursor - 1;
-        }
-      }
-    } else if (key.name === 'down') {
-      if (N > 0) {
-        if (cursor < N) {
-          cursor = cursor === N - 1 ? N + activeButton : cursor + 1;
-        } else {
-          cursor = 0;
-        }
-      }
-    } else if (key.name === 'left') {
-      if (cursor >= N || N === 0) {
-        activeButton = (activeButton - 1 + 3) % 3;
-        cursor = N + activeButton;
-      }
-    } else if (key.name === 'right') {
-      if (cursor >= N || N === 0) {
-        activeButton = (activeButton + 1) % 3;
-        cursor = N + activeButton;
-      }
-    } else if (key.name === 'tab') {
-      if (N > 0) {
-        if (key.shift) {
-          if (cursor === 0) {
-            activeButton = 2;
-            cursor = N + activeButton;
-          } else if (cursor >= N) {
-            if (activeButton === 0) {
-              cursor = N - 1;
-            } else {
-              activeButton--;
-              cursor = N + activeButton;
-            }
-          } else {
-            cursor--;
-          }
-        } else {
-          if (cursor < N - 1) {
-            cursor++;
-          } else if (cursor === N - 1) {
-            activeButton = 0;
-            cursor = N + activeButton;
-          } else {
-            if (activeButton === 2) {
-              cursor = 0;
-            } else {
-              activeButton++;
-              cursor = N + activeButton;
-            }
-          }
-        }
-      } else {
-        if (key.shift) {
-          activeButton = (activeButton - 1 + 3) % 3;
-        } else {
-          activeButton = (activeButton + 1) % 3;
-        }
-        cursor = activeButton;
-      }
-    } else if (key.name === 'space') {
-      if (N > 0 && cursor < N) {
-        if (checked.has(cursor)) {
-          checked.delete(cursor);
-        } else {
-          checked.add(cursor);
-        }
-      }
-    } else if (key.name === 'return' || key.name === 'enter') {
-      clearLines(lines.length);
+  const wasRaw = input.isRaw;
+  readline.emitKeypressEvents(input);
+  if (input.isTTY) {
+    input.setRawMode(true);
+  }
+
+  try {
+    while (true) {
+      const key = await getSingleKey();
       
-      if (activeButton === 1 || activeButton === 2) {
+      if (key.ctrl && key.name === 'c') {
+        clearLines(lines.length);
+        console.log(chalk.red('✗ Cancelled by user'));
+        return false;
+      }
+      
+      if (key.name === 'up') {
+        if (N > 0) {
+          if (cursor >= N) {
+            cursor = N - 1;
+          } else {
+            cursor = cursor === 0 ? N + activeButton : cursor - 1;
+          }
+        }
+      } else if (key.name === 'down') {
+        if (N > 0) {
+          if (cursor < N) {
+            cursor = cursor === N - 1 ? N + activeButton : cursor + 1;
+          } else {
+            cursor = 0;
+          }
+        }
+      } else if (key.name === 'left') {
+        if (cursor >= N || N === 0) {
+          activeButton = (activeButton - 1 + 3) % 3;
+          cursor = N + activeButton;
+        }
+      } else if (key.name === 'right') {
+        if (cursor >= N || N === 0) {
+          activeButton = (activeButton + 1) % 3;
+          cursor = N + activeButton;
+        }
+      } else if (key.name === 'tab') {
+        if (N > 0) {
+          if (key.shift) {
+            if (cursor === 0) {
+              activeButton = 2;
+              cursor = N + activeButton;
+            } else if (cursor >= N) {
+              if (activeButton === 0) {
+                cursor = N - 1;
+              } else {
+                activeButton--;
+                cursor = N + activeButton;
+              }
+            } else {
+              cursor--;
+            }
+          } else {
+            if (cursor < N - 1) {
+              cursor++;
+            } else if (cursor === N - 1) {
+              activeButton = 0;
+              cursor = N + activeButton;
+            } else {
+              if (activeButton === 2) {
+                cursor = 0;
+              } else {
+                activeButton++;
+                cursor = N + activeButton;
+              }
+            }
+          }
+        } else {
+          if (key.shift) {
+            activeButton = (activeButton - 1 + 3) % 3;
+          } else {
+            activeButton = (activeButton + 1) % 3;
+          }
+          cursor = activeButton;
+        }
+      } else if (key.name === 'space') {
+        if (N > 0 && cursor < N) {
+          if (checked.has(cursor)) {
+            checked.delete(cursor);
+          } else {
+            checked.add(cursor);
+          }
+        }
+      } else if (key.name === 'return' || key.name === 'enter') {
+        clearLines(lines.length);
+        
+        if (activeButton === 1 || activeButton === 2) {
+          if (N > 0 && request.details) {
+            const approvedDetails = request.details.filter((_, idx) => checked.has(idx));
+            request.details.length = 0;
+            request.details.push(...approvedDetails);
+            if (approvedDetails.length === 0) {
+              console.log(chalk.red('✗ Cancelled (no items selected in checklist)'));
+              return false;
+            }
+          }
+        }
+
+        if (activeButton === 0) {
+          console.log(chalk.red('✗ Denied'));
+          return false;
+        } else if (activeButton === 1) {
+          console.log(chalk.green('✓ Approved'));
+          return true;
+        } else {
+          console.log(chalk.magenta('✓ Approved for this session'));
+          return 'session';
+        }
+      } else if (key.sequence.toLowerCase() === 'y') {
+        clearLines(lines.length);
         if (N > 0 && request.details) {
           const approvedDetails = request.details.filter((_, idx) => checked.has(idx));
           request.details.length = 0;
@@ -336,54 +359,36 @@ async function runInteractiveConfirmation(request: ConfirmationRequest): Promise
             return false;
           }
         }
-      }
-
-      if (activeButton === 0) {
-        console.log(chalk.red('✗ Denied'));
-        return false;
-      } else if (activeButton === 1) {
         console.log(chalk.green('✓ Approved'));
         return true;
-      } else {
+      } else if (key.sequence.toLowerCase() === 'n') {
+        clearLines(lines.length);
+        console.log(chalk.red('✗ Denied'));
+        return false;
+      } else if (key.sequence.toLowerCase() === 's') {
+        clearLines(lines.length);
+        if (N > 0 && request.details) {
+          const approvedDetails = request.details.filter((_, idx) => checked.has(idx));
+          request.details.length = 0;
+          request.details.push(...approvedDetails);
+          if (approvedDetails.length === 0) {
+            console.log(chalk.red('✗ Cancelled (no items selected in checklist)'));
+            return false;
+          }
+        }
         console.log(chalk.magenta('✓ Approved for this session'));
         return 'session';
       }
-    } else if (key.sequence.toLowerCase() === 'y') {
-      clearLines(lines.length);
-      if (N > 0 && request.details) {
-        const approvedDetails = request.details.filter((_, idx) => checked.has(idx));
-        request.details.length = 0;
-        request.details.push(...approvedDetails);
-        if (approvedDetails.length === 0) {
-          console.log(chalk.red('✗ Cancelled (no items selected in checklist)'));
-          return false;
-        }
-      }
-      console.log(chalk.green('✓ Approved'));
-      return true;
-    } else if (key.sequence.toLowerCase() === 'n') {
-      clearLines(lines.length);
-      console.log(chalk.red('✗ Denied'));
-      return false;
-    } else if (key.sequence.toLowerCase() === 's') {
-      clearLines(lines.length);
-      if (N > 0 && request.details) {
-        const approvedDetails = request.details.filter((_, idx) => checked.has(idx));
-        request.details.length = 0;
-        request.details.push(...approvedDetails);
-        if (approvedDetails.length === 0) {
-          console.log(chalk.red('✗ Cancelled (no items selected in checklist)'));
-          return false;
-        }
-      }
-      console.log(chalk.magenta('✓ Approved for this session'));
-      return 'session';
-    }
 
-    // Re-render
-    clearLines(lines.length);
-    lines = renderFrame(request, N, cursor, activeButton, checked);
-    lines.forEach(line => console.log(line));
+      // Re-render
+      clearLines(lines.length);
+      lines = renderFrame(request, N, cursor, activeButton, checked);
+      lines.forEach(line => console.log(line));
+    }
+  } finally {
+    if (input.isTTY) {
+      input.setRawMode(wasRaw);
+    }
   }
 }
 
@@ -398,10 +403,12 @@ export function createReadlineConfirmation(rl: readlinePromises.Interface): Conf
 
     if (input.isTTY && output.isTTY) {
       rl.pause();
+      pauseThinkingTicker();
       try {
         console.log(''); // extra spacing before the card
         return await runInteractiveConfirmation(request);
       } finally {
+        resumeThinkingTicker();
         rl.resume();
       }
     }
@@ -438,8 +445,13 @@ export function createTerminalConfirmation(): ConfirmationHandler {
     }
 
     if (input.isTTY && output.isTTY) {
-      console.log(''); // extra spacing before the card
-      return await runInteractiveConfirmation(request);
+      pauseThinkingTicker();
+      try {
+        console.log(''); // extra spacing before the card
+        return await runInteractiveConfirmation(request);
+      } finally {
+        resumeThinkingTicker();
+      }
     }
 
     // fallback readline interface if non-TTY

@@ -36,6 +36,14 @@ export async function runSwarmCli(task: string, options: { session: string; html
       });
 
       printMarkdown(result.text);
+
+      // Run Post-Session Optimization and Guideline Harvester
+      try {
+        const { runPostSessionOptimization } = await import('../observability/optimizer.js');
+        await runPostSessionOptimization(options.session);
+      } catch (optErr: any) {
+        printProgress({ type: 'step', label: 'Optimizer Error', detail: optErr.message });
+      }
     });
 
     // Output the beautiful Trace Tree

@@ -16,7 +16,7 @@ type FileSnapshot = Record<string, { size: number; modifiedAt: number; type: 'fi
 
 const watchFile = 'filesystem-watch.json';
 const defaultMaxReadBytes = 180_000;
-const ignoredDirectoryNames = new Set(['.git', 'node_modules', 'dist', '.next', '.npm-cache', '.zilo-manager', 'outputs']);
+const ignoredDirectoryNames = new Set(['.git', 'node_modules', 'dist', '.next', '.npm-cache', '.zilo-manager']);
 const sensitiveNamePattern = /(^\\.env(?:\\..*)?$|\\.pem$|\\.key$|\\.p12$|\\.pfx$|id_rsa|id_dsa|credentials|secrets?|token)/i;
 
 function allowedRoots() {

@@ -603,6 +603,28 @@ function stopThinkingTicker() {
   }
 }
 
+let wasThinkingActiveBeforePause = false;
+let pausedThinkingLabel = 'Thinking';
+
+export function pauseThinkingTicker() {
+  if (thinkingTimer) {
+    wasThinkingActiveBeforePause = true;
+    pausedThinkingLabel = thinkingLabel;
+    stopThinkingTicker();
+    logUpdate.clear();
+  } else {
+    wasThinkingActiveBeforePause = false;
+  }
+}
+
+export function resumeThinkingTicker() {
+  if (wasThinkingActiveBeforePause) {
+    startThinkingTicker(pausedThinkingLabel);
+    wasThinkingActiveBeforePause = false;
+  }
+}
+
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 function printProgressWithSticky(event: ProgressEvent) {
   const w = Math.min(maxWidth(), 90);

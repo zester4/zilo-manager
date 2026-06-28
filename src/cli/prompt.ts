@@ -45,23 +45,21 @@ function renderSelect(title: string, options: PromptOption[], cursor: number, se
 
 async function readKey(): Promise<string> {
   return new Promise((resolve) => {
-    readline.emitKeypressEvents(input);
-    if (input.isTTY) input.setRawMode(true);
     const onKey = (_str: string, key: readline.Key) => {
       input.off('keypress', onKey);
-      if (input.isTTY) input.setRawMode(false);
-      if (key.ctrl && key.name === 'c') {
+      if (key?.ctrl && key?.name === 'c') {
         resolve('SIGINT');
         return;
       }
-      if (key.name === 'return') resolve('enter');
-      else if (key.name === 'space') resolve('space');
-      else if (key.name === 'up') resolve('up');
-      else if (key.name === 'down') resolve('down');
-      else if (key.name === 'n' || key.name === 'tab') resolve('next');
-      else if (key.name === 'p') resolve('prev');
-      else if (key.name === 'q') resolve('q');
-      else resolve(key.name || '');
+      const name = key?.name;
+      if (name === 'return' || name === 'enter') resolve('enter');
+      else if (name === 'space') resolve('space');
+      else if (name === 'up') resolve('up');
+      else if (name === 'down') resolve('down');
+      else if (name === 'n' || name === 'tab') resolve('next');
+      else if (name === 'p') resolve('prev');
+      else if (name === 'q') resolve('q');
+      else resolve(name || '');
     };
     input.on('keypress', onKey);
   });
@@ -73,29 +71,41 @@ export async function selectOne(title: string, options: PromptOption[], defaultI
   const selected = new Set<number>([cursor]);
   let page = Math.floor(cursor / pageSize);
 
-  while (true) {
-    const lines = renderSelect(title, options, cursor, selected, false, page, pageSize);
-    lines.forEach((line) => console.log(line));
-    const key = await readKey();
-    clearLines(lines.length);
-    if (key === 'SIGINT' || key === 'q') return null;
+  const wasRaw = input.isRaw;
+  readline.emitKeypressEvents(input);
+  if (input.isTTY) {
+    input.setRawMode(true);
+  }
 
-    if (key === 'up') {
-      cursor = cursor <= 0 ? options.length - 1 : cursor - 1;
-      page = Math.floor(cursor / pageSize);
-    } else if (key === 'down') {
-      cursor = cursor >= options.length - 1 ? 0 : cursor + 1;
-      page = Math.floor(cursor / pageSize);
-    } else if (key === 'next') {
-      const totalPages = Math.ceil(options.length / pageSize);
-      page = (page + 1) % totalPages;
-      cursor = page * pageSize;
-    } else if (key === 'prev') {
-      const totalPages = Math.ceil(options.length / pageSize);
-      page = page <= 0 ? totalPages - 1 : page - 1;
-      cursor = page * pageSize;
-    } else if (key === 'enter') {
-      return options[cursor] ?? null;
+  try {
+    while (true) {
+      const lines = renderSelect(title, options, cursor, selected, false, page, pageSize);
+      lines.forEach((line) => console.log(line));
+      const key = await readKey();
+      clearLines(lines.length);
+      if (key === 'SIGINT' || key === 'q') return null;
+
+      if (key === 'up') {
+        cursor = cursor <= 0 ? options.length - 1 : cursor - 1;
+        page = Math.floor(cursor / pageSize);
+      } else if (key === 'down') {
+        cursor = cursor >= options.length - 1 ? 0 : cursor + 1;
+        page = Math.floor(cursor / pageSize);
+      } else if (key === 'next') {
+        const totalPages = Math.ceil(options.length / pageSize);
+        page = (page + 1) % totalPages;
+        cursor = page * pageSize;
+      } else if (key === 'prev') {
+        const totalPages = Math.ceil(options.length / pageSize);
+        page = page <= 0 ? totalPages - 1 : page - 1;
+        cursor = page * pageSize;
+      } else if (key === 'enter') {
+        return options[cursor] ?? null;
+      }
+    }
+  } finally {
+    if (input.isTTY) {
+      input.setRawMode(wasRaw);
     }
   }
 }
@@ -106,32 +116,44 @@ export async function selectMany(title: string, options: PromptOption[], presele
   const selected = new Set<number>(preselected);
   let page = 0;
 
-  while (true) {
-    const lines = renderSelect(title, options, cursor, selected, true, page, pageSize);
-    lines.forEach((line) => console.log(line));
-    const key = await readKey();
-    clearLines(lines.length);
-    if (key === 'SIGINT' || key === 'q') return [];
+  const wasRaw = input.isRaw;
+  readline.emitKeypressEvents(input);
+  if (input.isTTY) {
+    input.setRawMode(true);
+  }
 
-    if (key === 'up') {
-      cursor = cursor <= 0 ? options.length - 1 : cursor - 1;
-      page = Math.floor(cursor / pageSize);
-    } else if (key === 'down') {
-      cursor = cursor >= options.length - 1 ? 0 : cursor + 1;
-      page = Math.floor(cursor / pageSize);
-    } else if (key === 'next') {
-      const totalPages = Math.ceil(options.length / pageSize);
-      page = (page + 1) % totalPages;
-      cursor = page * pageSize;
-    } else if (key === 'prev') {
-      const totalPages = Math.ceil(options.length / pageSize);
-      page = page <= 0 ? totalPages - 1 : page - 1;
-      cursor = page * pageSize;
-    } else if (key === 'space') {
-      if (selected.has(cursor)) selected.delete(cursor);
-      else selected.add(cursor);
-    } else if (key === 'enter') {
-      return [...selected].sort((a, b) => a - b).map((index) => options[index]!).filter(Boolean);
+  try {
+    while (true) {
+      const lines = renderSelect(title, options, cursor, selected, true, page, pageSize);
+      lines.forEach((line) => console.log(line));
+      const key = await readKey();
+      clearLines(lines.length);
+      if (key === 'SIGINT' || key === 'q') return [];
+
+      if (key === 'up') {
+        cursor = cursor <= 0 ? options.length - 1 : cursor - 1;
+        page = Math.floor(cursor / pageSize);
+      } else if (key === 'down') {
+        cursor = cursor >= options.length - 1 ? 0 : cursor + 1;
+        page = Math.floor(cursor / pageSize);
+      } else if (key === 'next') {
+        const totalPages = Math.ceil(options.length / pageSize);
+        page = (page + 1) % totalPages;
+        cursor = page * pageSize;
+      } else if (key === 'prev') {
+        const totalPages = Math.ceil(options.length / pageSize);
+        page = page <= 0 ? totalPages - 1 : page - 1;
+        cursor = page * pageSize;
+      } else if (key === 'space') {
+        if (selected.has(cursor)) selected.delete(cursor);
+        else selected.add(cursor);
+      } else if (key === 'enter') {
+        return [...selected].sort((a, b) => a - b).map((index) => options[index]!).filter(Boolean);
+      }
+    }
+  } finally {
+    if (input.isTTY) {
+      input.setRawMode(wasRaw);
     }
   }
 }

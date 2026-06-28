@@ -48,6 +48,18 @@ export class SwarmAgent {
     });
     const scratchpadTools = createScratchpadTools(sessionId);
 
+    let dynamicLearnings = '';
+    try {
+      const { queryWiki } = await import('../memory/corporate-wiki.js');
+      const learnings = await queryWiki(`optimization guidelines for ${this.config.name}`, 3).catch(() => []);
+      if (learnings && learnings.length > 0) {
+        dynamicLearnings = `\n4. DYNAMIC LESSONS LEARNED & SYSTEM-IMPROVEMENTS FROM PAST SESSIONS:\n` +
+          learnings.map((l, i) => `${i + 1}) [Session Lesson]: ${l.content}`).join('\n');
+      }
+    } catch {
+      // Grace fallback
+    }
+
     this.agent = new ToolLoopAgent({
       model: this.getDeptModel(),
       instructions: [
@@ -59,7 +71,8 @@ export class SwarmAgent {
         `1. CORPORATE WIKI: At the start of ANY task, run queryCorporateWiki to gain situational awareness of prior findings, schemas, or market analyses. When you complete a task, use publishToCorporateWiki to save critical intelligence/deliverables so other agents benefit.`,
         `2. JOINT WAR ROOMS: Instead of escalating everything to the COO/Manager, use collaborateWithPeer to directly open a Joint War Room sub-thread with any other specialist (e.g. backendArchitect, frontendArchitect, qaEngineer) to solve cross-functional tasks or negotiate contracts.`,
         `3. AUTONOMOUS SANDBOX RUNNER: If you are writing, patching, or verifying code or scripts, use executeSandboxDevLoop to run compilation and test suites, analyze errors, and self-heal your implementation in a fast local loop.`,
-      ].join('\n'),
+        dynamicLearnings,
+      ].filter(Boolean).join('\n'),
       tools: {
         ...this.config.tools,
         ...composioTools,
