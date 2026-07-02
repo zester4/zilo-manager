@@ -1195,6 +1195,73 @@ program
     }
   });
 
+program
+  .command('web')
+  .description('Launch the co-located ZilMate Swarm Command Center (Web CLI) in your browser')
+  .action(async () => {
+    try {
+      const chalk = (await import('chalk')).default;
+      const { env } = await import('./config/env.js');
+      const { openBrowser } = await import('./observability/traces.js');
+      const { join } = await import('node:path');
+      const { homedir } = await import('node:os');
+      const { existsSync, readFileSync } = await import('node:fs');
+
+      const port = env.zilmateDaemonPort;
+      const url = `http://127.0.0.1:${port}`;
+
+      console.log(chalk.blue(`Checking status of ZilMate daemon on port ${port}...`));
+
+      // Try to ping the daemon to check if it's already active
+      let isRunning = false;
+      try {
+        const response = await fetch(`${url}/api/status`);
+        if (response.ok) {
+          const data = await response.json() as any;
+          if (data.status === 'ok') {
+            isRunning = true;
+          }
+        }
+      } catch {
+        // Daemon not running
+      }
+
+      let token = '';
+      const tokenPath = join(homedir(), '.zilmate-token');
+
+      if (isRunning) {
+        console.log(chalk.green(`✓ Active daemon detected on port ${port}!`));
+        if (existsSync(tokenPath)) {
+          token = readFileSync(tokenPath, 'utf8').trim();
+        } else if (existsSync('.zilmate-token')) {
+          token = readFileSync('.zilmate-token', 'utf8').trim();
+        }
+      } else {
+        console.log(chalk.yellow(`Daemon is not currently active on port ${port}. Starting daemon...`));
+        
+        // Start the daemon process inline in the background
+        const { startDaemon } = await import('./daemon/service.js');
+        startDaemon();
+
+        // Wait a moment for daemon to start and generate the token
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
+        if (existsSync(tokenPath)) {
+          token = readFileSync(tokenPath, 'utf8').trim();
+        } else if (existsSync('.zilmate-token')) {
+          token = readFileSync('.zilmate-token', 'utf8').trim();
+        }
+      }
+
+      const browserUrl = token ? `${url}/?token=${token}` : url;
+      console.log(chalk.cyan(`\n🌌 Launching Swarm Command Center at ${browserUrl}...\n`));
+      openBrowser(browserUrl);
+    } catch (error) {
+      printError(friendlyError(error));
+      process.exitCode = 1;
+    }
+  });
+
 
 async function main() {
   await initWorkspace().catch(() => undefined);

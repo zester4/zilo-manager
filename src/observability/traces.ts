@@ -453,12 +453,12 @@ export function printStatsTable(stats: SessionStats) {
 
 export function openBrowser(urlOrPath: string) {
   try {
-    const cmd = process.platform === 'win32'
-      ? 'start'
-      : process.platform === 'darwin'
-        ? 'open'
-        : 'xdg-open';
-    exec(`${cmd} "${urlOrPath}"`);
+    if (process.platform === 'win32') {
+      exec(`start "" "${urlOrPath}"`);
+    } else {
+      const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+      exec(`${cmd} "${urlOrPath}"`);
+    }
   } catch (err) {
     // Fail silently
   }

@@ -52,7 +52,60 @@ export async function withConfirmationHandler<T>(handler: ConfirmationHandler | 
   }
 }
 
+function isAutoApproved(request: ConfirmationRequest): boolean {
+  const autoApprove = (process.env.ZILMATE_AUTO_APPROVE || '').trim().toLowerCase();
+  if (!autoApprove || autoApprove === 'false') {
+    return false;
+  }
+
+  // Option 1: Approve everything
+  if (autoApprove === 'true' || autoApprove === 'all' || autoApprove === 'yes') {
+    return true;
+  }
+
+  // Option 2: Approve all read-only operations
+  if (autoApprove === 'read-only' || autoApprove === 'readonly') {
+    return request.access === 'Read-only';
+  }
+
+  // Option 3: Comma-separated lists of allowed toolkits or tools
+  const items = autoApprove.split(',').map((s) => s.trim()).filter(Boolean);
+  if (items.length > 0) {
+    const toolkit = request.toolkitSlug.toLowerCase();
+    const tool = request.toolSlug.toLowerCase();
+    const targetTools = (request.targetTools || []).map((t) => t.toLowerCase());
+
+    for (const item of items) {
+      if (item === 'read-only' || item === 'readonly') {
+        if (request.access === 'Read-only') return true;
+      } else if (item === toolkit || item === tool || targetTools.includes(item)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+async function notifyAutoApproval(request: ConfirmationRequest) {
+  try {
+    const { emitProgress } = await import('./progress.js');
+    emitProgress({
+      type: 'step',
+      label: `Auto-approved permission`,
+      detail: `${request.action || request.summary} (${request.access || 'Write'})`,
+    });
+  } catch {
+    // fallback to no-op
+  }
+}
+
 export async function requestConfirmation(request: ConfirmationRequest) {
+  if (isAutoApproved(request)) {
+    await notifyAutoApproval(request);
+    return true;
+  }
+
   const key = approvalKey(request);
   const toolkitKey = toolkitApprovalKey(request);
 

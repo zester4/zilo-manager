@@ -131,6 +131,17 @@ export class SwarmAgent {
             if (tools.length > 0) {
               const detail = tools.map(describeTool).join(', ');
               emitProgress({ type: 'step', label: `${this.config.name} selected tools`, detail });
+              
+              // Emit granular subagent steps for rich logging
+              for (const toolName of tools) {
+                emitProgress({
+                  type: 'subagent:step',
+                  label: describeTool(toolName),
+                  agent: this.config.name,
+                  department: this.config.department,
+                });
+              }
+              
               tracker.recordEvent('tool_call', 'selected_tools', detail).catch(() => {});
             }
           }

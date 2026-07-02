@@ -1,347 +1,64 @@
-# ZilMate SDK
+# 🌌 ZilMate SDK Master Portal
 
-Use ZilMate as a programmable agent layer in Next.js, server routes, background workers, and automation scripts. The SDK wraps the same manager, subagents, memory, jobs, and voice stack as the CLI.
+Welcome to the **ZilMate SDK**—the production-grade agentic engineering middleware. Expose autonomous AI software engineers, parallel decentralized swarms, semantic blackboard systems, durable background schedulers, and sandboxed host utilities inside your Node.js, Next.js, and backend server runtimes.
 
-## Install
-
-```bash
-npm install zilmate
+```
+                    ┌──────────────────────────────────────┐
+                    │       ZilMate Master Core SDK        │
+                    └──────────────────┬───────────────────┘
+                                       │
+         ┌─────────────────────────────┼─────────────────────────────┐
+         ▼                             ▼                             ▼
+┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
+│   Introduction   │          │  Quickstart & UI │          │    The Swarm     │
+│ [introduction]   │          │   [quickstart]   │          │     [swarm]      │
+└────────┬─────────┘          └────────┬─────────┘          └────────┬─────────┘
+         │                             │                             │
+         ├─────────────────────────────┼─────────────────────────────┤
+         ▼                             ▼                             ▼
+┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
+│  Orchestration   │          │   Coding Suite   │          │  Semantic Wiki   │
+│  [orchestrator]  │          │  [coding-agent]  │          │  [wiki-memory]   │
+└────────┬─────────┘          └────────┬─────────┘          └────────┬─────────┘
+         │                             │                             │
+         └─────────────────────────────┼─────────────────────────────┘
+                                       ▼
+                            ┌──────────────────┐          ┌──────────────────┐
+                            │  Host Utilities  │          │   Cron Schedulers│
+                            │ [host-utilities] │          │[jobs-scheduling] │
+                            └──────────────────┘          └──────────────────┘
 ```
 
-Set environment variables (see `.env.example`):
-
-```env
-AI_GATEWAY_API_KEY=...
-ZILMATE_USER_ID=zilmate-your-id
-```
-
-### Environment Variables Reference
-
-| Variable | Description | Required / Optional |
-|---|---|---|
-| `AI_GATEWAY_API_KEY` | Model gateway authentication token. Required if not using Vercel OIDC. | Required |
-| `ZILMATE_USER_ID` | Session/User identification for persistent tracking. | Required |
-| `COMPOSIO_API_KEY` | Access key for system integrations and browser automation. | Optional |
-| `TAVILY_API_KEY` | Enable advanced multi-source web-search research. | Optional |
-| `DEEPGRAM_API_KEY` | Deepgram speech-to-text / real-time voice sessions API key. | Optional |
-| `UPSTASH_REDIS_REST_URL` / `TOKEN` | Enables remote multi-instance Redis memory & scheduling. | Optional |
-| `AWS_ACCESS_KEY_ID` / `SECRET` / `REGION` | AWS S3 credentials for high-performance cloud backups. | Optional |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to Google Cloud Service Account json for GCS tools. | Optional |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob read/write credentials. | Optional |
-| `CORPORATE_WIKI_PROVIDER` | Set to `supermemory` or `upstash` (vector store engine fallback). | Optional |
-| `SUPERMEMORY_API_KEY` | Integrates corporate wiki to your SuperMemory dashboard. | Optional |
-| `UPSTASH_VECTOR_REST_URL` / `TOKEN` | Upstash Vector credentials for semantic blackboard wiki index. | Optional |
-
-## Quick start (Node / Next.js server)
-
-```ts
-import { createZilMate } from 'zilmate/server';
-
-const zilmate = createZilMate({
-  sessionId: 'dashboard-user-123',
-  onProgress: (event) => console.log(event.type, event.label),
-});
-
-const { text } = await zilmate.manager({ message: 'Summarize my open jobs and suggest next steps.' });
-console.log(text);
-```
-
-## Next.js App Router — streaming chat route
-
-Create `app/api/zilmate/route.ts`:
-
-```ts
-import { createZilMate } from 'zilmate/server';
-
-export const runtime = 'nodejs';
-export const maxDuration = 120;
-
-export async function POST(request: Request) {
-  const { message, sessionId = 'web-default' } = await request.json();
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (payload: unknown) => {
-        controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
-      };
-
-      const zilmate = createZilMate({
-        sessionId,
-        onProgress: (event) => send({ type: 'progress', event }),
-      });
-
-      try {
-        const { text } = await zilmate.manager({ message });
-        send({ type: 'done', text });
-      } catch (error) {
-        send({
-          type: 'error',
-          message: error instanceof Error ? error.message : String(error),
-        });
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'application/x-ndjson',
-      'Cache-Control': 'no-cache',
-    },
-  });
-}
-```
-
-Client hook (React):
-
-```tsx
-'use client';
-
-import { useState } from 'react';
-
-export function ZilMateChat() {
-  const [input, setInput] = useState('');
-  const [reply, setReply] = useState('');
-  const [progress, setProgress] = useState<string[]>([]);
-
-  async function send() {
-    setProgress([]);
-    const res = await fetch('/api/zilmate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: input, sessionId: 'web-1' }),
-    });
-
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const chunk = JSON.parse(line);
-        if (chunk.type === 'progress') setProgress((p) => [...p, chunk.event.label]);
-        if (chunk.type === 'done') setReply(chunk.text);
-      }
-    }
-  }
-
-  return (
-    <div>
-      <textarea value={input} onChange={(e) => setInput(e.target.value)} />
-      <button onClick={send}>Ask ZilMate</button>
-      <ul>{progress.map((p) => <li key={p}>{p}</li>)}</ul>
-      <pre>{reply}</pre>
-    </div>
-  );
-}
-```
-
-## Subagents
-
-The manager orchestrates specialized subagents. Call them directly when you do not need full orchestration.
-
-| Method | Agent | Best for |
-|--------|-------|----------|
-| `manager()` | Main orchestrator | General tasks, routing, tools, memory |
-| `coding()` | Coding agent + appBuilder + qaIntegration | Repo edits, builds, tests, patches |
-| `imageAgent()` | Image director | Prompt refinement + generation/editing |
-| `goalManager()` | Goal planner | Break goals into steps and schedules |
-| `research()` | Docs/web research | Sourced answers |
-| `help()` | Quick help | Usage and troubleshooting |
-| `post()` | Copywriter | Short social/status posts |
-
-### Coding agent with sub-coders
-
-```ts
-const zilmate = createZilMate({ sessionId: 'repo-session' });
-
-const { text } = await zilmate.coding({
-  prompt: [
-    'In this Next.js repo:',
-    '1) Add a /api/health route',
-    '2) Run typecheck',
-    '3) Return files changed and test output',
-  ].join('\n'),
-});
-```
-
-Internally, the coding agent can delegate to:
-
-- **appBuilder** — full app/game/UI implementation
-- **qaIntegration** — tests, build fixes, release checks
-
-It also uses **code intelligence tools**: `grepCodebase`, `reviewWorkingTree`, `explainSymbol`, `scaffoldFiles`, `runProjectChecks`.
-
-### Image director
-
-```ts
-const { text } = await zilmate.imageAgent({
-  prompt: 'Product hero image: dark SaaS dashboard on laptop, cyan accent, no text gibberish, 16:9',
-});
-```
-
-The image agent runs `enhanceImagePrompt` then `generateImage` for precise visuals.
-
-## Agentic features (10x differentiators)
-
-### 1. Situational awareness
-
-Before major work, the manager can call `getSituationBrief` (cwd, git, workspace, models, jobs, memory, projects). Use directly:
-
-```ts
-const brief = await zilmate.situation({ sessionId: 'default' });
-console.log(brief.git, brief.recentJobs, brief.models);
-```
-
-### 2. Session continuity (handoffs)
-
-Resume work across sessions:
-
-```ts
-const handoff = await zilmate.handoff({ sessionId: 'default' });
-if (handoff) {
-  await zilmate.manager({
-    message: `Continue from handoff:\n${handoff.summary}\nNext: ${handoff.nextActions.join(', ')}`,
-  });
-}
-```
-
-The manager can also call `generateSessionHandoff` / `saveSessionHandoff` before ending a long task.
-
-### 3. Decentralized Swarm (Joint War Rooms)
-
-ZilMate organizes 30+ specialized AI agents (such as `frontendArchitect`, `aiSeoStrategist`, `croSpecialist`) across 6 core corporate divisions. Rather than routing all sub-tasks through a central orchestrator, specialists coordinate horizontally:
-
-- **Joint War Rooms (`collaborateWithPeer`)**: Specialists can directly instantiate peer specialists, pass context, and negotiate schemas, payloads, or creatives in-session.
-
-```ts
-const { text } = await zilmate.swarm({
-  role: 'frontendArchitect',
-  prompt: 'Collaborate with backendArchitect to define the lead payload contract.',
-});
-```
-
-### 4. Semantic Corporate Wiki (Shared Blackboard)
-
-Every strategic design document, finalized deliverable, and API contract is indexed into a shared knowledge base, serving as a semantic blackboard:
-
-- **Multi-Provider Backend**: Supports `supermemory`, `upstash` (Vector DB), or auto-falls back to a local keyword-search JSON database in the workspace.
-- **Methods**: `queryCorporateWiki(query, limit)` / `publishToCorporateWiki(title, content, tags)`.
-
-```ts
-await zilmate.publishToWiki({
-  title: 'Lead Schema',
-  content: 'id: string, email: string, source: string',
-  tags: ['api', 'schema']
-});
-
-const results = await zilmate.queryWiki({ query: 'Lead Schema' });
-```
-
-### 5. Autonomous Sandbox Dev Loops
-
-The coding and QA specialists utilize a self-healing sandbox execution loop to run verification checks on local edits:
-
-- Compiles local code and executes automated test suites (`npx playwright test` or custom runners).
-- Captures compiler diagnostics and assertion stack traces, automatically self-repairing local patches iteratively in-place until the build is fully clean.
-
-### 6. High-Performance Host Utility Tool Suites
-
-The agent manager registers robust, secure, and fully sandboxed cross-platform utility suites to run system-level diagnostic and file operations directly:
-
-- **⚙️ DevOps Suite**: Explores docker containers, fetches live logs, and manages service nodes (`listDockerContainers`, `getDockerContainerLogs`, `controlDockerContainer`). Safely checks configuration integrity (`validateEnv`).
-- **🛡️ SysOps Suite**: Probes open ports, resolves pings, runs trace-routing hops, and securely inspects local SQLite schemas (`listOpenPorts`, `pingHost`, `traceRoute`, `getDatabaseSchema`).
-- **☁️ Multi-Cloud Storage**: Seamlessly uploads large payloads, dumps, and reports to AWS S3, GCS, or Vercel Blob using a tiered SDK client, CLI native commands, or custom instructions fallback.
-- **🎥 Multimedia Processing**: Invokes local FFmpeg utilities to transcode videos, extract audio tracks, and run AI speech-to-text transcription fallback-layers (`transcodeVideo`, `extractAudio`, `speechToText`).
-
-## Model selection
-
-CLI users run `/model pick`. In code, persist selections to the workspace:
-
-```ts
-import { applyStoredModelSelections, saveModelSelection } from 'zilmate/server';
-
-await applyStoredModelSelections();
-await saveModelSelection('manager', 'anthropic/claude-sonnet-4');
-await saveModelSelection('coding', 'openai/gpt-5.4-mini');
-```
-
-Models are stored in `~/Downloads/ZilMate/config/models.json` (or `ZILMATE_WORKSPACE`).
-
-## Memory
-
-```ts
-await zilmate.remember({ text: 'User prefers pnpm and App Router', tags: ['prefs'] });
-const hits = await zilmate.recall({ query: 'package manager', limit: 5 });
-```
-
-## Background jobs
-
-```ts
-const job = await zilmate.createJob({
-  task: 'Weekly summary of GitHub PRs',
-  schedule: '0 9 * * 1',
-});
-
-await zilmate.runDueJobs();
-const logs = await zilmate.getJobLogs(job.id);
-```
-
-Expose webhooks for QStash:
-
-```ts
-// app/api/jobs/webhook/route.ts
-import { createZilMate } from 'zilmate/server';
-
-export async function POST(req: Request) {
-  const body = await req.json();
-  const zilmate = createZilMate();
-  const job = await zilmate.handleJobWebhook(body, process.env.ZILMATE_JOB_WEBHOOK_SECRET);
-  return Response.json({ ok: true, jobId: job.id });
-}
-```
-
-Use `zilmate jobs listen --tunnel` (Cloudflare quick tunnel) during local development.
-
-## Voice (Deepgram)
-
-```ts
-const session = await zilmate.startVoiceSession({
-  onProgress: (e) => console.log(e.label),
-});
-
-// session exposes Deepgram agent wiring — see src/voice/deepgram.ts
-console.log(session.config.listenModel);
-await session.close?.();
-```
-
-## Confirmation in server contexts
-
-Destructive tools require explicit approval. Provide a handler:
-
-```ts
-import type { ConfirmationHandler } from 'zilmate/server';
-
-const confirm: ConfirmationHandler = async (request) => {
-  // In a web app, push to UI and await user click
-  console.log('Approve?', request.message);
-  return true;
-};
-
-const zilmate = createZilMate({ confirm });
-```
-
-## Exports reference
-
-```ts
+---
+
+## 📚 Complete SDK Documentation
+
+The SDK documentation is split into specialized, deep-dive chapters. Explore each module to see copy-pasteable TypeScript code, design directives, and execution telemetry.
+
+1. **[🌌 1. Architectural Introduction](file:///c:/Users/mseyy/Downloads/zilo-manager/sdk/introduction.md)**
+   - High-level multi-agent flow, system dependencies, core engines, and complete `.env` variables reference table.
+2. **[⚡ 2. 3-Minute Quickstart & React UI](file:///c:/Users/mseyy/Downloads/zilo-manager/sdk/quickstart.md)**
+   - Package install instructions, server initialization, typed Next.js App Router streaming endpoints (SSE/NDJSON), and glassmorphic Chat UI.
+3. **[🎯 3. Manager Orchestrator & Safety Approvals](file:///c:/Users/mseyy/Downloads/zilo-manager/sdk/orchestrator.md)**
+   - Manager `.manager()` vs `.chat()`, situational awareness diagnostics, session handoffs, and intercepting restricted tools with asynchronous human-in-the-loop approvals.
+4. **[🛠️ 4. Autonomous Engineering & Coding Loops](file:///c:/Users/mseyy/Downloads/zilo-manager/sdk/coding-agent.md)**
+   - Programmatic repo refactoring via `.coding()`, App Builder styling directives (HSL palettes, bento layouts), and QA's self-healing compilation loops.
+5. **[🐝 5. Decentralized Swarms & Joint War Rooms](file:///c:/Users/mseyy/Downloads/zilo-manager/sdk/swarm.md)**
+   - Running 30+ specialists in parallel, Joint War Room Horizontal Collaboration (`collaborateWithPeer`), and exporting glassmorphic trace dashboards.
+6. **[💾 6. Semantic Wiki & Long-Term Memory](file:///c:/Users/mseyy/Downloads/zilo-manager/sdk/wiki-memory.md)**
+   - Long-term episodic memory (`remember`/`recall`), the Shared Blackboard Wiki pattern, and configuring SuperMemory, Upstash, or Local JSON vector stores.
+7. **[⚙️ 7. Sandboxed Host Utilities](file:///c:/Users/mseyy/Downloads/zilo-manager/sdk/host-utilities.md)**
+   - Safety sandbox system calls: DevOps Docker container logs, SysOps networking pings/ports, tiered AWS S3/GCS/Vercel Cloud Storage, and FFmpeg transcoder engines.
+8. **[📅 8. Durable Jobs & Background Scheduling](file:///c:/Users/mseyy/Downloads/zilo-manager/sdk/jobs-scheduling.md)**
+   - Registering recurring background jobs, enqueuing delayed tasks, setting up serverless QStash webhook endpoints, and running local developer tunnels.
+
+---
+
+## 📦 Core Server Exports Reference
+
+Initialize the SDK by importing the server layer. The primary export is `createZilMate`.
+
+```typescript
 import {
   createZilMate,
   chat,
@@ -356,28 +73,43 @@ import {
 } from 'zilmate/server';
 ```
 
-## CLI parity
+### Options Object (`ZilMateOptions`)
 
-| CLI | SDK |
-|-----|-----|
-| `zilmate talk` | `createZilMate().manager()` |
-| `zilmate coding "..."` | `createZilMate().coding()` |
-| `zilmate heal` | manager + heal tools (via manager) |
-| `zilmate jobs worker` | `runDueJobs()` + worker process |
-| `/model pick` | `saveModelSelection()` |
-| `zilmate doctor` | Runs diagnostics CLI locally |
-| `zilmate setup` | Runs interactive setup CLI locally |
+When calling `createZilMate(options)`, pass the following parameters:
 
-## Production checklist
+```typescript
+export type ZilMateOptions = {
+  sessionId?: string;                     // Isolates conversational threads, memories, and job tracking
+  onProgress?: (event: ProgressEvent) => void; // Captures thinking states and tool calls in real-time
+  confirm?: ConfirmationHandler;          // Attaches a custom interceptor for restricted system tools
+};
+```
 
-1. Run `zilmate setup` once per environment (merge-safe).
-2. Set `ZILMATE_WORKSPACE` for durable notebook/knowledge/skills.
-3. Enable Redis for multi-instance memory and jobs.
-4. Use QStash + Cloudflare tunnel for hosted schedules.
-5. Never expose `AI_GATEWAY_API_KEY` to the browser — keep SDK calls on the server.
+---
 
-## Learn more
+## 🔄 CLI Parity Reference
 
-- Repository: https://github.com/zester4/zilmate
-- Agent skill: `plugins/zilmate/skills/zilmate/SKILL.md`
-- AI SDK patterns: https://sdk.vercel.ai/docs
+The SDK exposes programmatic parity for every core CLI feature, enabling developers to easily migrate CLI routines to server routes:
+
+| CLI Command | SDK Equivalent Call | Primary Focus |
+|:---|:---|:---|
+| `zilmate talk` | `createZilMate().manager({ message })` | General planning and open-ended tool loops |
+| `zilmate coding "..."` | `createZilMate().coding({ prompt })` | Full-stack implementation and self-healing builds |
+| `zilmate jobs worker` | `createZilMate().runDueJobs()` | Triggers background cron tasks |
+| `/model pick` | `saveModelSelection(agent, model)` | Persists custom LLM routing settings |
+| `zilmate doctor` | (Diagnostics built-in to `situation()`) | Validates environment, folders, and networks |
+| `zilmate setup` | (Automatic on `createZilMate()` initialization) | Bootstraps configuration files and path trees |
+
+---
+
+## 🛡️ Production Security Checklist
+
+When deploying ZilMate in highly-available, production-facing systems, ensure you adhere to the following best practices:
+
+> [!CAUTION]
+> **Keep Credentials Safe**: Never import or invoke the server-level ZilMate SDK inside client-side components (React/Next.js client code). Always route requests through secure Next.js API Routes, Express nodes, or serverless functions to avoid exposing your model gateway keys or system tokens to the browser console.
+
+1. **Verify Environment Sandbox**: Ensure that commands executed by agents are run inside sandboxed containers or restricted-user environments to avoid shell injections.
+2. **Leverage Persistent Redis**: For stateless, horizontally-scaled environments (like AWS Lambda or Vercel Serverless), configure `UPSTASH_REDIS_REST_URL` to handle distributed lock states, scheduler crons, and thread histories.
+3. **Register Custom Confirmation Interceptors**: Always attach a `confirm` handler when exposing system-level Docker, file modification, or shell tools to end-users.
+4. **Setup Secure Tunneling**: During local webhook testing (with QStash), run `npx zilmate jobs listen --tunnel` to securely proxy requests through Cloudflare tunnels instead of exposing raw router ports.

@@ -64,6 +64,7 @@ export type Env = {
   zilmateTriggerWorkflowsEnabled: boolean;
   deepgramApiKey: string | undefined;
   zilmateVoiceEnabled: boolean;
+  zilmateVoiceInputDevice: string;
   zilmateVoiceMode: string;
   zilmateVoiceListenModel: string;
   zilmateVoiceListenVersion: string;
@@ -106,7 +107,8 @@ export type Env = {
   supermemoryApiKey: string | undefined;
   upstashVectorRestUrl: string | undefined;
   upstashVectorRestToken: string | undefined;
-  zilmateDaemonPort: number;
+   zilmateDaemonPort: number;
+  zilmateAutoApprove: string | undefined;
 };
 
 export const env: Env = {
@@ -124,6 +126,7 @@ export const env: Env = {
   zilmateTriggerWorkflowsEnabled: process.env.ZILMATE_TRIGGER_WORKFLOWS_ENABLED === 'true',
   deepgramApiKey: process.env.DEEPGRAM_API_KEY,
   zilmateVoiceEnabled: process.env.ZILMATE_VOICE_ENABLED === 'true',
+  zilmateVoiceInputDevice: process.env.ZILMATE_VOICE_INPUT_DEVICE || '',
   zilmateVoiceMode: process.env.ZILMATE_VOICE_MODE || 'agent',
   zilmateVoiceListenModel: process.env.ZILMATE_VOICE_LISTEN_MODEL || 'flux-general-en',
   zilmateVoiceListenVersion: process.env.ZILMATE_VOICE_LISTEN_VERSION || 'v2',
@@ -167,6 +170,7 @@ export const env: Env = {
   upstashVectorRestUrl: process.env.UPSTASH_VECTOR_REST_URL,
   upstashVectorRestToken: process.env.UPSTASH_VECTOR_REST_TOKEN,
   zilmateDaemonPort: Number(process.env.ZILMATE_DAEMON_PORT || '8124'),
+  zilmateAutoApprove: process.env.ZILMATE_AUTO_APPROVE,
 };
 
 export function hasGatewayAuth() {

@@ -239,7 +239,7 @@ export async function runDoctor(options: { live?: boolean; sessionId?: string; i
     if (confirm) {
       try {
         console.log('Installing rembg python package...');
-        execSync('pip install rembg', { stdio: 'inherit' });
+        execSync('pip install "rembg[cpu]"', { stdio: 'inherit' });
         hasRembg = await checkDependency('rembg --version').catch(() => false);
       } catch (e) {
         console.log(chalk.red(`Failed to install rembg: ${e instanceof Error ? e.message : String(e)}`));

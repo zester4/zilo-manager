@@ -267,7 +267,7 @@ async function askSection(rl: readline.Interface, title: string, description: st
   return askYesNo(rl, question, fallback);
 }
 
-async function readEnvValues(path: string) {
+export async function readEnvValues(path: string) {
   if (!existsSync(path)) return new Map<string, string>();
   try {
     const content = await readFile(path, 'utf8');
@@ -277,7 +277,7 @@ async function readEnvValues(path: string) {
   }
 }
 
-async function writeEnvValues(path: string, values: Map<string, string>, options: { merge?: boolean; touchedKeys?: Set<string> } = {}) {
+export async function writeEnvValues(path: string, values: Map<string, string>, options: { merge?: boolean; touchedKeys?: Set<string> } = {}) {
   if (existsSync(path)) {
     try {
       const backupPath = `${path}.bak`;
@@ -342,7 +342,7 @@ async function installCameraDependency() {
   return false;
 }
 
-function resolveEnvPath(passedPath?: string): string {
+export function resolveEnvPath(passedPath?: string): string {
   if (passedPath) return passedPath;
   if (existsSync('.env')) return '.env';
   return path.join(resolveWorkspaceRoot(), '.env');

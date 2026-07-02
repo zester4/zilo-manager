@@ -43,6 +43,7 @@ export function getVoiceConfig(): ZilMateVoiceConfig {
     sttFallbackModel: env.zilmateVoiceSttFallbackModel,
     useNovaFallback: env.zilmateVoiceUseNovaFallback,
     configured: Boolean(env.deepgramApiKey),
+    inputDevice: env.zilmateVoiceInputDevice,
   };
   if (env.zilmateVoiceEotThreshold !== undefined) config.eotThreshold = env.zilmateVoiceEotThreshold;
   if (env.zilmateVoiceEagerEotThreshold !== undefined) config.eagerEotThreshold = env.zilmateVoiceEagerEotThreshold;

@@ -289,25 +289,60 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
         return result.text;
       }),
       research: subagentTool('research', 'Research docs or current web information and return sourced summaries.', async (prompt, abortSignal) => {
-        const result = await research.generate(agentInput(prompt, abortSignal));
+        const result = await research.generate({
+          ...agentInput(prompt, abortSignal),
+          onStepFinish: (step) => {
+            for (const toolName of toolNamesFromStep(step)) {
+              emitProgress({ type: 'subagent:step', label: toolName, agent: 'research' });
+            }
+          },
+        });
         return result.text;
-      }),
+      }, { agent: 'research', trackSteps: true }),
       automationPlanner: subagentTool('automationPlanner', 'Plan background jobs, schedules, trigger workflows, monitoring, follow-ups, QStash, and webhook automations.', async (prompt, abortSignal) => {
-        const result = await automationPlanner.generate(agentInput(prompt, abortSignal));
+        const result = await automationPlanner.generate({
+          ...agentInput(prompt, abortSignal),
+          onStepFinish: (step) => {
+            for (const toolName of toolNamesFromStep(step)) {
+              emitProgress({ type: 'subagent:step', label: toolName, agent: 'automationPlanner' });
+            }
+          },
+        });
         return result.text;
-      }),
+      }, { agent: 'automationPlanner', trackSteps: true }),
       personalAssistant: subagentTool('personalAssistant', 'Daily planning, reminders, briefings, prioritization, follow-ups, summaries, and memory-aware assistant work.', async (prompt, abortSignal) => {
-        const result = await personalAssistant.generate(agentInput(prompt, abortSignal));
+        const result = await personalAssistant.generate({
+          ...agentInput(prompt, abortSignal),
+          onStepFinish: (step) => {
+            for (const toolName of toolNamesFromStep(step)) {
+              emitProgress({ type: 'subagent:step', label: toolName, agent: 'personalAssistant' });
+            }
+          },
+        });
         return result.text;
-      }),
+      }, { agent: 'personalAssistant', trackSteps: true }),
       developerHelper: subagentTool('developerHelper', 'Developer-focused help for ZilMate CLI, SDK, Next.js integration, publishing, QStash, Cloudflare tunnels, webhooks, and debugging.', async (prompt, abortSignal) => {
-        const result = await developerHelper.generate(agentInput(prompt, abortSignal));
+        const result = await developerHelper.generate({
+          ...agentInput(prompt, abortSignal),
+          onStepFinish: (step) => {
+            for (const toolName of toolNamesFromStep(step)) {
+              emitProgress({ type: 'subagent:step', label: toolName, agent: 'developerHelper' });
+            }
+          },
+        });
         return result.text;
-      }),
+      }, { agent: 'developerHelper', trackSteps: true }),
       security: subagentTool('security', 'OSINT investigations (username/email/phone/domain lookups) and penetration testing (subdomain discovery, port scanning, vulnerability scanning, SQL injection, web fuzzing). Requires user authorization for active scanning.', async (prompt, abortSignal) => {
-        const result = await security.generate(agentInput(prompt, abortSignal));
+        const result = await security.generate({
+          ...agentInput(prompt, abortSignal),
+          onStepFinish: (step) => {
+            for (const toolName of toolNamesFromStep(step)) {
+              emitProgress({ type: 'subagent:step', label: toolName, agent: 'security' });
+            }
+          },
+        });
         return result.text;
-      }),
+      }, { agent: 'security', trackSteps: true }),
       coding: subagentTool('coding', 'Software engineering in a git repo: status/diff/log, unified patches, tests, commits. Use for code edits and debugging — not SDK/docs questions.', async (prompt, abortSignal) => {
         const result = await coding.generate({
           ...agentInput(prompt, abortSignal),
@@ -320,13 +355,27 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
         return result.text;
       }, { agent: 'coding', trackSteps: true }),
       goalManager: subagentTool('goalManager', 'Break goals into actionable steps, timelines, dependencies, and optional scheduled follow-ups.', async (prompt, abortSignal) => {
-        const result = await goalManager.generate(agentInput(prompt, abortSignal));
+        const result = await goalManager.generate({
+          ...agentInput(prompt, abortSignal),
+          onStepFinish: (step) => {
+            for (const toolName of toolNamesFromStep(step)) {
+              emitProgress({ type: 'subagent:step', label: toolName, agent: 'goalManager' });
+            }
+          },
+        });
         return result.text;
-      }),
+      }, { agent: 'goalManager', trackSteps: true }),
       finance: subagentTool('finance', 'Financial analysis, market data, and business reporting using Yahoo Finance.', async (prompt, abortSignal) => {
-        const result = await finance.generate(agentInput(prompt, abortSignal));
+        const result = await finance.generate({
+          ...agentInput(prompt, abortSignal),
+          onStepFinish: (step) => {
+            for (const toolName of toolNamesFromStep(step)) {
+              emitProgress({ type: 'subagent:step', label: toolName, agent: 'finance' });
+            }
+          },
+        });
         return result.text;
-      }),
+      }, { agent: 'finance', trackSteps: true }),
       digitalCorporation: subagentTool('digitalCorporation', 'Run a real online business end-to-end. Strategy, Engineering, Growth, Operations, and Data.', async (prompt, abortSignal) => {
         const result = await digitalCorp.generate({
           ...agentInput(prompt, abortSignal),

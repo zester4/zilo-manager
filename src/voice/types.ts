@@ -22,6 +22,7 @@ export type ZilMateVoiceConfig = {
   configured: boolean;
   ttsSpeed?: number;
   listenKeywords?: string[];
+  inputDevice?: string;
 };
 
 export type ZilMateVoiceSessionOptions = {

@@ -854,8 +854,16 @@ function printProgressWithSticky(event: ProgressEvent) {
 
   // ── Subagent step (e.g. coding agent tool calls) ─────────────────────────
   else if (event.type === 'subagent:step') {
-    const agentTag = event.agent ? chalk.hex('#A78BFA')(`[${event.agent}] `) : '';
-    console.log(`  ${agentTag}${chalk.hex('#6366F1')('│')} ${chalk.hex('#C4B5FD')(event.label)}`);
+    if (displayState.activeSpecialists.size > 1 && event.agent) {
+      const spec = displayState.activeSpecialists.get(event.agent);
+      if (spec) {
+        spec.status = `Using ${event.label}`;
+        spec.lastActive = Date.now();
+      }
+    } else {
+      const agentTag = event.agent ? chalk.hex('#A78BFA')(`[${event.agent}] `) : '';
+      console.log(`  ${agentTag}${chalk.hex('#6366F1')('│')} ${chalk.hex('#C4B5FD')(event.label)}`);
+    }
   }
 
   // ── Subagent end ─────────────────────────────────────────────────────────

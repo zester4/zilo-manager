@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -13,6 +13,7 @@ export type TunnelResult = {
   url: string;
   provider: 'cloudflare';
   detail: string;
+  child?: ChildProcess;
 };
 
 async function commandExists(command: string) {
@@ -107,7 +108,7 @@ export async function startCloudflareQuickTunnel(localUrl: string, timeoutMs = 4
       const url = extractCloudflareUrl(output);
       if (url) {
         clearTimeout(timer);
-        resolve({ url, provider: 'cloudflare', detail: output.slice(-400) });
+        resolve({ url, provider: 'cloudflare', detail: output.slice(-400), child });
       }
     };
 

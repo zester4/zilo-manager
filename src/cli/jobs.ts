@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import { startJobWebhookServer } from '../jobs/webhook-server.js';
 import { startCloudflareQuickTunnel } from './tunnel.js';
 import { env } from '../config/env.js';
+import { readEnvValues, writeEnvValues, resolveEnvPath } from './setup.js';
 
 export async function createCliJob(task: string, options: { schedule?: string; runAt?: string; json?: boolean }) {
   const job = await createJob({
@@ -86,11 +87,29 @@ export async function startCliJobListener(options: { port?: string; tunnel?: boo
     ['Tunnel', options.tunnel ? 'starting cloudflared…' : 'disabled'],
   ]);
 
+  let tunnelChild: any = null;
+
   if (options.tunnel) {
     const tunnel = await startCloudflareQuickTunnel(server.url);
+    tunnelChild = tunnel.child;
     const publicUrl = `${tunnel.url.replace(/\/$/, '')}/jobs/webhook`;
     console.log(chalk.green(`Public webhook: ${publicUrl}`));
-    console.log(chalk.yellow('Update ZILMATE_PUBLIC_JOB_WEBHOOK_URL in .env if this URL changed.'));
+    
+    // Automatically update .env
+    try {
+      const envPath = resolveEnvPath();
+      const envValues = await readEnvValues(envPath);
+      const oldUrl = envValues.get('ZILMATE_PUBLIC_JOB_WEBHOOK_URL');
+      if (oldUrl !== publicUrl) {
+        envValues.set('ZILMATE_PUBLIC_JOB_WEBHOOK_URL', publicUrl);
+        const touchedKeys = new Set(['ZILMATE_PUBLIC_JOB_WEBHOOK_URL']);
+        await writeEnvValues(envPath, envValues, { merge: true, touchedKeys });
+        console.log(chalk.green(`✓ Automatically updated ZILMATE_PUBLIC_JOB_WEBHOOK_URL in .env`));
+      }
+    } catch (err) {
+      console.log(chalk.yellow(`Could not auto-update .env: ${err instanceof Error ? err.message : String(err)}`));
+      console.log(chalk.yellow('Update ZILMATE_PUBLIC_JOB_WEBHOOK_URL in .env manually if this URL changed.'));
+    }
   }
 
   console.log(chalk.gray('Press Ctrl+C to stop.'));
@@ -98,5 +117,14 @@ export async function startCliJobListener(options: { port?: string; tunnel?: boo
     process.on('SIGINT', () => resolve());
     process.on('SIGTERM', () => resolve());
   });
+
+  if (tunnelChild) {
+    try {
+      tunnelChild.kill();
+    } catch (err) {
+      // ignore
+    }
+  }
   await server.close();
+  process.exit(0);
 }
