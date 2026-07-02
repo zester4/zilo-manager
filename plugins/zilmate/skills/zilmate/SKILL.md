@@ -29,6 +29,8 @@ Avoid vague claims like "all-in-one AI platform" or "just a wrapper." Lead with 
 - `zilmate jobs ...`: persistent jobs, schedules, logs, worker, and API-first automation.
 - `zilmate setup`: guided setup for keys, voice, jobs, Composio, QStash, desktop features, and optional tools.
 - `zilmate doctor`: health checks for keys, tools, models, package state, and feature readiness.
+- `zilmate optimize [session]`: post-session telemetry trace analysis and prompt optimization CLI command.
+- `zilmate web` / `npm run web`: interactive local web interface/Command Center.
 - `zilmate/server`: server-side SDK for apps, backend routes, Next.js API routes, hosted workers, and custom UIs.
 - `zilmate/cli`: terminal-oriented entry behavior.
 - `zilmate/edge`: future direction for Deno/Supabase-style HTTP-safe adapters.
@@ -42,12 +44,13 @@ ZilMate combines these layers:
 - **Realtime voice:** Deepgram Flux-style listening plus spoken replies, with shared text/voice session behavior when launched from chat.
 - **Long-term memory:** User-owned facts, preferences, and useful working context.
 - **Background jobs:** Local worker, scheduled tasks, logs/status APIs, and optional hosted scheduling through QStash/webhooks.
+- **Virtual Treasury & Budgets:** Secure, sandboxed financial budgeting layer with a maximum cap (`ZILMATE_TREASURY_CAP`), automated budget requests, and developer-confirmed virtual cards to limit background agent expenditures.
 - **Composio connectors:** Connected-app actions and trigger-to-workflow handlers for apps such as Gmail, Calendar, Slack, Notion, GitHub, Linear, Discord, Supabase, Stripe, and other supported integrations.
 - **Desktop tools:** Clipboard, screenshots, screenshot analysis, camera/photo capture, file/app launching, keyboard automation, system info, and running app inspection.
 - **File tools:** Search, read/write, move/copy/rename, create folders, metadata, summaries, duplicate/large-file checks, watch-style folder checks, and safe deletion with confirmation.
 - **Shell tools:** Run shell/PowerShell commands, scripts, package installs, build/test commands, pipelines, and system checks when the user approves the working context.
 - **Computer-use tools:** Screen reading, mouse/keyboard actions, window management, drag/drop, and UI interaction for local automation.
-- **Image tools:** Generate new images or edit existing images using OpenAI or Gemini models. Accept local image paths, image URLs, and optional masks, then save outputs locally.
+- **Image tools:** Generate, edit, watermark, remove backgrounds (isolation via Python `rembg`), or optimize/compress images (via local `ffmpeg`) for fast-loading web apps and SEO standards.
 - **Research tools:** Docs and web research, with source-aware summaries when current information matters.
 - **Specialist subagents:** Chat, research, post writing, image work, automation planning, personal assistance, developer help, coding, goal management, and security.
 
@@ -138,6 +141,20 @@ Expected behavior:
 - Voice answers should know they are in voice mode, avoid markdown-heavy output, and speak concise responses.
 - Voice should share useful session context with text chat when launched from the same talk session.
 
+## Web Command Center Guidance
+
+The Web Command Center is an interactive, browser-based management dashboard.
+
+Expected behavior:
+- `zilmate web` or `npm run web` starts the local background daemon and automatically opens the Command Center in the browser (defaulting to the daemon port, e.g., `http://127.0.0.1:8124`).
+- It must reuse the exact same `'default'` session ID as the terminal CLI so that chat histories, long-term memories, and agent context are completely synchronized in real time.
+- Features include:
+  - **Interactive Chat Console:** supports rich markdown text, code highlighting, copy-to-clipboard, autocomplete command suggestions (triggers on `/`), and real-time agent typing indicators.
+  - **Live Voice Console:** provides dual-channel realtime speech-to-speech interaction powered by Deepgram, active microphone selector, parameters selection (listen/speak model tuning), voice doctor checklist diagnostics, and out-loud speaker audio tests.
+  - **Live Trace Visualizer:** parses and displays nested agent calls, tool executions, and specialist subagent lifespans (`swarm-traces.jsonl`) with status coloring.
+  - **Unified System Doctor:** showcases visual checklist tests for local configuration and allows running automatic background installations/fixes (such as setting up `playwright` or isolating backgrounds with `rembg`).
+  - **Enterprise Resources:** lists active corporate wiki articles, background jobs queue, connected Composio app integrations, loaded MCP servers, active camera devices, and direct model parameters selection.
+
 ## Jobs And Automation
 
 ZilMate jobs are for persistent automation:
@@ -156,6 +173,7 @@ Clarify the runtime model:
 - Local jobs do not keep running if the laptop sleeps, shuts down, or loses internet.
 - Hosted always-on behavior needs a deployed worker plus webhook/QStash delivery.
 - QStash gives durable callbacks only when a public endpoint is running.
+- **Proactive Webhooks:** The built-in listener endpoint at `/api/webhooks/listeners` accepts triggers from external platforms (e.g. Slack via Composio or Stripe webhooks) secured with the `ZILMATE_JOB_WEBHOOK_SECRET` env variable, classifying, planning, and running agentic orchestration jobs in the background asynchronously.
 
 ## Setup Guidance
 

@@ -6,38 +6,27 @@ import { resolveWorkspaceRoot } from '../workspace/paths.js';
 // Set DOTENV_CONFIG_QUIET to suppress verbose dotenv logging
 process.env.DOTENV_CONFIG_QUIET = 'true';
 
-// Temporary silent wrapper around dotenv loads to guarantee 100% pristine terminal layout
-const originalLog = console.log;
-const originalError = console.error;
-console.log = () => {};
-console.error = () => {};
+// Load default .env from current directory first (non-overriding)
+loadDotenv({ quiet: true });
 
-try {
-  // Load default .env from current directory first (non-overriding)
-  loadDotenv({ quiet: true });
+// Resolve workspace root and load its env files as a global fallback
+const workspaceRoot = resolveWorkspaceRoot();
+const workspaceEnvPath = path.join(workspaceRoot, '.env');
+const workspaceEnvLocalPath = path.join(workspaceRoot, '.env.local');
 
-  // Resolve workspace root and load its env files as a global fallback
-  const workspaceRoot = resolveWorkspaceRoot();
-  const workspaceEnvPath = path.join(workspaceRoot, '.env');
-  const workspaceEnvLocalPath = path.join(workspaceRoot, '.env.local');
+if (existsSync(workspaceEnvPath)) {
+  loadDotenv({ path: workspaceEnvPath, override: true, quiet: true });
+}
+if (existsSync(workspaceEnvLocalPath)) {
+  loadDotenv({ path: workspaceEnvLocalPath, override: true, quiet: true });
+}
 
-  if (existsSync(workspaceEnvPath)) {
-    loadDotenv({ path: workspaceEnvPath, override: true, quiet: true });
-  }
-  if (existsSync(workspaceEnvLocalPath)) {
-    loadDotenv({ path: workspaceEnvLocalPath, override: true, quiet: true });
-  }
-
-  // Load current working directory .env and .env.local to ensure local overrides take precedence
-  if (existsSync('.env')) {
-    loadDotenv({ path: '.env', override: true, quiet: true });
-  }
-  if (existsSync('.env.local')) {
-    loadDotenv({ path: '.env.local', override: true, quiet: true });
-  }
-} finally {
-  console.log = originalLog;
-  console.error = originalError;
+// Load current working directory .env and .env.local to ensure local overrides take precedence
+if (existsSync('.env')) {
+  loadDotenv({ path: '.env', override: true, quiet: true });
+}
+if (existsSync('.env.local')) {
+  loadDotenv({ path: '.env.local', override: true, quiet: true });
 }
 
 export type ImageProvider = 'openai' | 'gemini';
@@ -109,6 +98,7 @@ export type Env = {
   upstashVectorRestToken: string | undefined;
    zilmateDaemonPort: number;
   zilmateAutoApprove: string | undefined;
+  zilmateTreasuryCap: number;
 };
 
 export const env: Env = {
@@ -171,6 +161,10 @@ export const env: Env = {
   upstashVectorRestToken: process.env.UPSTASH_VECTOR_REST_TOKEN,
   zilmateDaemonPort: Number(process.env.ZILMATE_DAEMON_PORT || '8124'),
   zilmateAutoApprove: process.env.ZILMATE_AUTO_APPROVE,
+  zilmateTreasuryCap: (() => {
+    const cap = Number(process.env.ZILMATE_TREASURY_CAP);
+    return isNaN(cap) || cap <= 0 ? 50000 : cap;
+  })(),
 };
 
 export function hasGatewayAuth() {

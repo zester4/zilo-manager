@@ -6,6 +6,7 @@ import { requestConfirmation } from '../runtime/confirm.js';
 import { workspaceLayout } from '../workspace/paths.js';
 import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { env } from '../config/env.js';
 
 export interface LedgerBudget {
   id: string;
@@ -41,15 +42,15 @@ export interface TreasuryLedger {
   virtualCards: LedgerCard[];
 }
 
-const DEFAULT_LEDGER: TreasuryLedger = {
+const DEFAULT_LEDGER = (): TreasuryLedger => ({
   treasury: {
-    totalCap: 50000,
+    totalCap: env.zilmateTreasuryCap,
     allocated: 0,
-    available: 50000
+    available: env.zilmateTreasuryCap
   },
   budgets: [],
   virtualCards: []
-};
+});
 
 function getLedgerPath(): string {
   const layout = workspaceLayout();
@@ -62,15 +63,30 @@ function getLedgerPath(): string {
 
 function readLedger(): TreasuryLedger {
   const filePath = getLedgerPath();
+  let ledger: TreasuryLedger;
   if (!existsSync(filePath)) {
-    return DEFAULT_LEDGER;
+    ledger = DEFAULT_LEDGER();
+    writeLedger(ledger);
+    return ledger;
   }
   try {
     const raw = readFileSync(filePath, 'utf8');
-    return JSON.parse(raw);
+    ledger = JSON.parse(raw);
   } catch {
-    return DEFAULT_LEDGER;
+    ledger = DEFAULT_LEDGER();
+    writeLedger(ledger);
+    return ledger;
   }
+
+  // Dynamic ledger capacity sync
+  if (ledger.treasury.totalCap !== env.zilmateTreasuryCap) {
+    const diff = env.zilmateTreasuryCap - ledger.treasury.totalCap;
+    ledger.treasury.totalCap = env.zilmateTreasuryCap;
+    ledger.treasury.available += diff;
+    writeLedger(ledger);
+  }
+
+  return ledger;
 }
 
 function writeLedger(ledger: TreasuryLedger) {

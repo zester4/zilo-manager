@@ -79,10 +79,53 @@ export async function startInteractiveChat(sessionId = 'default') {
   console.log(theme.muted(`Memory: ${memoryBackendName()} · Run: ${runId.slice(0, 8)}`));
   console.log(theme.muted('Commands: /exit · /clear · /help · /voice · /model · /model pick · /skills\n'));
 
+  // Track the active abort controller so SIGINT can cancel the current agent run
+  let currentAbortController: AbortController | null = null;
+
+  // Handle Ctrl+C while readline is active (terminal raw mode)
+  rl.on('SIGINT', () => {
+    if (currentAbortController) {
+      currentAbortController.abort();
+      console.log('\n' + theme.warn('Interrupted. Canceling agent...'));
+    } else {
+      // No active agent — clean exit
+      rl.close();
+      process.exit(0);
+    }
+  });
+
+  // Fallback SIGINT for when readline is paused (non-raw stdin)
+  const onProcessSigint = () => {
+    if (currentAbortController) {
+      currentAbortController.abort();
+      console.log('\n' + theme.warn('Interrupted. Canceling agent...'));
+    } else {
+      rl.close();
+      process.exit(0);
+    }
+  };
+  process.on('SIGINT', onProcessSigint);
+
   try {
     while (true) {
+      // Track readline pause state so confirmation handlers can coordinate
+      const rlPaused = { value: false };
+      const pauseRl = () => {
+        if (!rlPaused.value) {
+          rl.pause();
+          rlPaused.value = true;
+        }
+      };
+      const resumeRl = () => {
+        if (rlPaused.value) {
+          rl.resume();
+          rlPaused.value = false;
+        }
+      };
+
       let answer: string;
       try {
+        resumeRl();
         answer = await readComposerLine(rl);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -118,6 +161,7 @@ export async function startInteractiveChat(sessionId = 'default') {
           console.log(theme.warn('Provide a business task, e.g. /swarm "Analyze our Q1 revenue trends"'));
           continue;
         }
+        pauseRl();
         await runSwarmCli(swarmTask, { session: sessionId });
         continue;
       }
@@ -265,23 +309,41 @@ if (message === '/clear') {
         ? `Conversation so far:\n${context}\n\n${relevantMemory ? `Relevant long-term memory:\n${relevantMemory}\n\n` : ''}New user message:\n${message}\n\n${voiceInstruction}`
         : `${relevantMemory ? `Relevant long-term memory:\n${relevantMemory}\n\n` : ''}${message}\n\n${voiceInstruction}`;
 
-      const response = await withAskHandler(createReadlineAskHandler(rl), () =>
-        runManager(prompt, {
-          progress: printProgress,
-          sessionId,
-          confirm: createReadlineConfirmation(rl),
-        }),
-      );
-      printAssistantTurn(response);
+      pauseRl();
+      const abortController = new AbortController();
+      currentAbortController = abortController;
+      try {
+        const response = await withAskHandler(createReadlineAskHandler(rl), () =>
+          runManager(prompt, {
+            progress: printProgress,
+            sessionId,
+            confirm: createReadlineConfirmation(rl, rlPaused),
+            abortSignal: abortController.signal,
+          }),
+        );
+        printAssistantTurn(response);
 
-      turns.push(
-        { role: 'user', content: message, createdAt: new Date().toISOString() },
-        { role: 'assistant', content: response, createdAt: new Date().toISOString() },
-      );
-      await saveTurns(sessionId, turns);
+        turns.push(
+          { role: 'user', content: message, createdAt: new Date().toISOString() },
+          { role: 'assistant', content: response, createdAt: new Date().toISOString() },
+        );
+        await saveTurns(sessionId, turns);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          (error.name === 'AbortError' || abortController.signal.aborted)
+        ) {
+          console.log(theme.warn('Agent run was interrupted by user.'));
+        } else {
+          throw error;
+        }
+      } finally {
+        currentAbortController = null;
+      }
     }
   } finally {
     rl.close();
+    process.off('SIGINT', onProcessSigint);
   }
 }
 

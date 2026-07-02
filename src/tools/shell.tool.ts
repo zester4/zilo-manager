@@ -25,6 +25,23 @@ interface BackgroundProcess {
 
 const backgroundProcesses = new Map<string, BackgroundProcess>();
 
+function enforceProcessCap() {
+  const MAX_PROCESSES = 100;
+  if (backgroundProcesses.size <= MAX_PROCESSES) return;
+
+  // Gather completed/failed/killed processes ordered by startTime
+  const inactiveProcs = Array.from(backgroundProcesses.values())
+    .filter(p => p.status !== 'running')
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+  let toRemove = backgroundProcesses.size - MAX_PROCESSES;
+  for (const proc of inactiveProcs) {
+    if (toRemove <= 0) break;
+    backgroundProcesses.delete(proc.id);
+    toRemove--;
+  }
+}
+
 
 export const shellTools = {
   executeCommand: tool({
@@ -467,6 +484,7 @@ export const shellTools = {
           error: undefined as string | undefined,
         };
 
+        enforceProcessCap();
         backgroundProcesses.set(id, procEntry);
 
         child.stdout?.on('data', (data) => {

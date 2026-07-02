@@ -164,6 +164,40 @@ export async function runDoctor(options: { live?: boolean; sessionId?: string; i
     status: env.zilmateTriggerWorkflowsEnabled ? 'pass' : 'warn',
     detail: env.zilmateTriggerWorkflowsEnabled ? 'Composio trigger events will queue jobs' : 'Composio trigger workflows are disabled',
   });
+
+  // Virtual Treasury Diagnostics
+  let treasuryStatus: DoctorStatus = 'pass';
+  let treasuryDetail = '';
+  try {
+    const ledgerPath = path.join(workspaceLayout().config, 'treasury-ledger.json');
+    if (existsSync(ledgerPath)) {
+      const raw = await readFile(ledgerPath, 'utf8');
+      const ledger = JSON.parse(raw);
+      if (ledger && ledger.treasury) {
+        const totalCap = ledger.treasury.totalCap ?? 0;
+        const allocated = ledger.treasury.allocated ?? 0;
+        const available = ledger.treasury.available ?? 0;
+        const budgetsCount = ledger.budgets?.length ?? 0;
+        const cardsCount = ledger.virtualCards?.length ?? 0;
+        treasuryDetail = `Capacity: $${totalCap} (Allocated: $${allocated}, Available: $${available}) | Budgets: ${budgetsCount}, Cards: ${cardsCount}`;
+      } else {
+        treasuryStatus = 'fail';
+        treasuryDetail = 'Treasury ledger file is corrupted or has an invalid structure.';
+      }
+    } else {
+      treasuryStatus = 'warn';
+      treasuryDetail = `Virtual Treasury ledger not initialized yet (Capacity configured: $${env.zilmateTreasuryCap})`;
+    }
+  } catch (error) {
+    treasuryStatus = 'fail';
+    treasuryDetail = `Error reading virtual treasury: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  checks.push({
+    name: 'Virtual Treasury',
+    status: treasuryStatus,
+    detail: treasuryDetail,
+  });
   checks.push({
     name: 'Voice',
     status: env.zilmateVoiceEnabled && hasDeepgram() ? 'pass' : env.zilmateVoiceEnabled ? 'fail' : 'warn',

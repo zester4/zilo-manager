@@ -392,7 +392,7 @@ async function runInteractiveConfirmation(request: ConfirmationRequest): Promise
   }
 }
 
-export function createReadlineConfirmation(rl: readlinePromises.Interface): ConfirmationHandler {
+export function createReadlineConfirmation(rl: readlinePromises.Interface, isPausedRef?: { value: boolean }): ConfirmationHandler {
   return async (request) => {
     const { toolkitSlug, toolSlug, summary, action, access, targetTools, details } = request;
 
@@ -402,14 +402,19 @@ export function createReadlineConfirmation(rl: readlinePromises.Interface): Conf
     }
 
     if (input.isTTY && output.isTTY) {
+      const wasPaused = isPausedRef?.value ?? false;
       rl.pause();
+      if (isPausedRef) isPausedRef.value = true;
       pauseThinkingTicker();
       try {
         console.log(''); // extra spacing before the card
         return await runInteractiveConfirmation(request);
       } finally {
         resumeThinkingTicker();
-        rl.resume();
+        if (!wasPaused) {
+          rl.resume();
+          if (isPausedRef) isPausedRef.value = false;
+        }
       }
     }
 

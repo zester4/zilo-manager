@@ -1,8 +1,10 @@
-﻿import { stepCountIs, ToolLoopAgent, tool } from 'ai';
+import { stepCountIs, ToolLoopAgent, tool } from 'ai';
 import { z } from 'zod';
 import { generateText } from 'ai';
 import { models } from '../config/models.js';
 import { imageGenerateTool } from '../tools/image-generate.tool.js';
+import { imageIntelligenceTools } from '../tools/image-intelligence.tool.js';
+import { multimediaTools } from '../tools/multimedia.tool.js';
 import { limits } from '../safety/limits.js';
 import { emitProgress } from '../runtime/progress.js';
 
@@ -22,6 +24,8 @@ export function createImageAgent() {
       'Before generating: clarify subject, composition, style, lighting, colors, aspect ratio, and must-include details.',
       'Use enhanceImagePrompt when the user brief is vague. Preserve user intent; do not drift to unrelated aesthetics.',
       'Use generateImage for final output. Pass imagePaths/imageUrls for edits; pass maskPath for inpainting.',
+      'Use removeBackground when local background isolation is needed or when creating transparent product assets/cutouts.',
+      'Use optimizeImage to compress, resize, format-convert, or watermark images for fast-loading web apps and pristine SEO standards.',
       'Pick provider deliberately: openai/chatgpt for precise edits; gemini/google for rich conceptual visuals.',
       'Return saved file paths, provider/model used, and a one-line description of what was created.',
     ].join(' '),
@@ -44,6 +48,8 @@ export function createImageAgent() {
         },
       }),
       generateImage: imageGenerateTool,
+      removeBackground: imageIntelligenceTools.removeBackground,
+      optimizeImage: multimediaTools.optimizeImage,
     },
     stopWhen: stepCountIs(limits.subagentSteps),
   });

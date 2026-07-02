@@ -873,6 +873,7 @@ mcp
     const result = await (mcpManagementTools.removeMCPServer as any).execute({ name });
     if (result.error) console.error(result.error);
     else console.log(result.status);
+  });
 
 mcp
   .command('restart')
@@ -881,7 +882,6 @@ mcp
     const { closeMCPClients } = await import('./tools/mcp.tool.js');
     await closeMCPClients();
     console.log('MCP clients closed.');
-  });
   });
 
 const chat = program

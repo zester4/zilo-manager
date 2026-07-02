@@ -208,6 +208,8 @@ function buildManagerInstructions(options: { sessionId?: string } = {}) {
       '- **Research specialist (`research`)**: Thorough web browser and documentation scraper that compiles sources and outputs inline citations.',
       '- **Security specialist (`security`)**: Specialized OSINT investigator and penetration tester for authorized diagnostic vulnerability scans.',
       '- **Personal Assistant (`personalAssistant`)**: Daily planner, briefings manager, reminder manager, and personal knowledge graph administrator.',
+      '- **Finance specialist (`finance`)**: Virtual Treasury administrator, agent budget allocations, virtual cards manager, financial analyzer, and Yahoo Finance market researcher.',
+      '- **Image Director (`image`)**: Asset creator, editor, watermark brander, local background remover, and SEO image optimizer.',
     ].join('\n'),
   });
 
@@ -284,7 +286,7 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
         const result = await post.generate(agentInput(prompt, abortSignal));
         return result.text;
       }),
-      image: subagentTool('image', 'Generate or edit image assets from prompts, local image paths, image URLs, and masks; return saved local file paths.', async (prompt, abortSignal) => {
+      image: subagentTool('image', 'Generate, edit, watermark, remove backgrounds (isolation), or optimize/compress images for fast web apps and pristine SEO standards.', async (prompt, abortSignal) => {
         const result = await image.generate(agentInput(prompt, abortSignal));
         return result.text;
       }),
@@ -365,7 +367,7 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
         });
         return result.text;
       }, { agent: 'goalManager', trackSteps: true }),
-      finance: subagentTool('finance', 'Financial analysis, market data, and business reporting using Yahoo Finance.', async (prompt, abortSignal) => {
+      finance: subagentTool('finance', 'Financial analysis, market data, Yahoo Finance, Virtual Treasury balances, agent budget allocations, and issuing restricted virtual cards.', async (prompt, abortSignal) => {
         const result = await finance.generate({
           ...agentInput(prompt, abortSignal),
           onStepFinish: (step) => {
@@ -452,7 +454,7 @@ export async function createManagerAgent(runId: string = randomUUID(), options: 
   });
 }
 
-export async function runManager(prompt: string, options: { progress?: (event: ProgressEvent) => void; runId?: string; sessionId?: string; confirm?: ConfirmationHandler; ask?: AskHandler } = {}) {
+export async function runManager(prompt: string, options: { progress?: (event: ProgressEvent) => void; runId?: string; sessionId?: string; confirm?: ConfirmationHandler; ask?: AskHandler; abortSignal?: AbortSignal } = {}) {
   return withProgressListener(options.progress, async () => {
     return withConfirmationHandler(options.confirm, async () => {
       return withAskHandler(options.ask, async () => {
@@ -461,10 +463,17 @@ export async function runManager(prompt: string, options: { progress?: (event: P
       const manager = await createManagerAgent(runId, options.sessionId ? { sessionId: options.sessionId } : {});
 
       // Proactively check dependencies in the background
-      runProactiveDoctor().catch(() => undefined);
+      (() => {
+        try {
+          runProactiveDoctor().catch(() => undefined);
+        } catch {
+          // Catch any synchronous invocation errors
+        }
+      })();
 
       const result = await manager.generate({
         prompt,
+        ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
         onStepFinish: (step) => {
           const tools = toolNamesFromStep(step);
           if (tools.length > 0) {

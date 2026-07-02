@@ -135,6 +135,7 @@ type SetupOptions = {
   supermemoryApiKey?: string;
   upstashVectorRestUrl?: string;
   upstashVectorRestToken?: string;
+  treasuryCap?: string;
 };
 
 const defaults = {
@@ -512,6 +513,18 @@ export async function runSetup(options: SetupOptions = {}) {
     }
 
     if (values.get('ZILMATE_JOBS_ENABLED') === 'true') {
+      if (options.treasuryCap) {
+        values.set('ZILMATE_TREASURY_CAP', options.treasuryCap);
+        touchedKeys.add('ZILMATE_TREASURY_CAP');
+      } else if (!options.yes && (!values.has('ZILMATE_TREASURY_CAP') || options.force)) {
+        console.log(chalk.cyan('\nVirtual Treasury & Budget Ledger'));
+        console.log(chalk.gray('Configure the maximum spend capacity in virtual credits/dollars for background agents.'));
+        const currentCap = values.get('ZILMATE_TREASURY_CAP') || '50000';
+        const cap = (await rl.question(`Virtual Treasury Capacity (default: ${currentCap}): `)).trim();
+        values.set('ZILMATE_TREASURY_CAP', cap || currentCap);
+        touchedKeys.add('ZILMATE_TREASURY_CAP');
+      }
+
       if (options.qstashToken && options.publicJobWebhookUrl) {
         values.set('UPSTASH_QSTASH_TOKEN', options.qstashToken);
         values.set('ZILMATE_PUBLIC_JOB_WEBHOOK_URL', options.publicJobWebhookUrl);
@@ -908,6 +921,8 @@ export async function runSetup(options: SetupOptions = {}) {
       ['Tavily', values.get('TAVILY_API_KEY') ? 'configured' : 'skipped'],
       ['Redis', values.get('UPSTASH_REDIS_REST_URL') && values.get('UPSTASH_REDIS_REST_TOKEN') ? 'configured' : 'local fallback'],
       ['Jobs', values.get('ZILMATE_JOBS_ENABLED') === 'true' ? 'enabled' : 'disabled'],
+      ['Virtual Treasury', values.get('ZILMATE_JOBS_ENABLED') === 'true' ? `$${values.get('ZILMATE_TREASURY_CAP') || '50000'}` : 'disabled'],
+
       ['Corporate Wiki', values.get('CORPORATE_WIKI_PROVIDER') || 'local fallback'],
       ['QStash', values.get('UPSTASH_QSTASH_TOKEN') && values.get('ZILMATE_PUBLIC_JOB_WEBHOOK_URL') ? 'configured' : 'local schedules only'],
       ['Workspace', values.get('ZILMATE_WORKSPACE') || workspaceLayout().root],
